@@ -1,0 +1,49 @@
+name: Import original native mockup PNG references
+on:
+  push:
+    paths:
+      - ".github/workflows/import-native-mockups-once.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  import-mockups:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download the four verified historical native design boards
+        shell: bash
+        env:
+          SOURCE_COMMIT: "d57a184c22579eb22bffd7756e030e498aa200f3"
+        run: |
+          set -euo pipefail
+          mkdir -p design/mockups
+          for name in 01-main-pages-and-planning 02-workouts-and-measurement 03-journal-maps-and-health 04-editing-and-settings; do
+            curl --fail --location --silent --show-error --retry 3 \
+              "https://raw.githubusercontent.com/fuloplevente1998/TrainPilot-AI-Studio/${SOURCE_COMMIT}/docs/reference/native/design/mockups/${name}.png" \
+              --output "design/mockups/${name}.png"
+          done
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          spec=json.loads(pathlib.Path('design/mockups/MANIFEST.json').read_text())
+          for entry in spec['boards']:
+              path=pathlib.Path('design/mockups')/entry['file']
+              actual=hashlib.sha256(path.read_bytes()).hexdigest()
+              assert actual==entry['sha256'], f'Checksum mismatch: {entry["file"]} {actual}'
+              print(f'VERIFIED {entry["file"]} {len(path.read_bytes())} bytes')
+          assert len(spec['boards']) == 4
+          PY
+      - name: Commit only the design reference PNG files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add design/mockups/01-main-pages-and-planning.png design/mockups/02-workouts-and-measurement.png design/mockups/03-journal-maps-and-health.png design/mockups/04-editing-and-settings.png
+          if ! git diff --cached --quiet; then
+            git commit -m "design: import four original native mockup boards with verified checksums"
+            git push origin HEAD:main
+          fi
