@@ -18,3 +18,10 @@ Az eredeti appban meglévő edzésprogramok, élő edzés, GPS, Wear OS, Health 
 - A [TrainPilot eredeti repó](https://github.com/fuloplevente1998/TrainPilot) változatlan marad; a [korábbi AI Studio repó](https://github.com/fuloplevente1998/TrainPilot-AI-Studio) csak referencia.
 - A felhasználó régi edzésadatait egyszeri, ellenőrzött importtal lehet áthozni. **Nem kell kétirányú, folyamatos main–V2 szinkron.**
 - A végleges megjelenés a natív képtáblákból indul, **de** az új navigáció felülírja a képeken lévő régi alsó tabsort.
+
+## Kötelező teljes funkciók — külön ellenőrzési lista
+
+- **[106 eredeti gyakorlat és 13 kész program adatkészlettel](docs/08-KATALOGUS_ES_13_PROGRAM.md)**
+- **[Teljes, tesztelhető funkcióparitás: profilok, Coach, RIR, edzésstílusok, saját programok, GPS-es térkép, Wear, integrációk](docs/07-TELJES_FUNKCIOPARITAS_ELFOGADAS.md)**
+
+A katalógus teljes, tényleges négynyelvű adatállománya a [data/reference/native-catalog-main-7473.json](data/reference/native-catalog-main-7473.json) fájlban van; a többi alkalmazáskódot az AI Studio hozza létre.

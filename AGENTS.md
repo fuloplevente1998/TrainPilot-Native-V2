@@ -8,3 +8,5 @@
 **Bizonyíték:** minden késznek jelölt funkcióhoz működő állapotkezelés, valós adatkapcsolat, hibafeltétel, teszt, build és változásjegyzék. Nem elfogadható a vizuális mockup mint runtime-evidence.
 **Adatok:** ne törölj/írj felül régi naplót, ne támaszkodj csendes szinkronra; migráció csak felhasználói kezdeményezésre és ellenőrzéssel.
 **Kiadás:** kezdetben kizárólag külön telepíthető, debug aláírású teszt-APK. Release/Play/eredeti aláírás csak későbbi külön jóváhagyással.
+
+**Katalógus/paritás kötelező:** `docs/07-TELJES_FUNKCIOPARITAS_ELFOGADAS.md` és `data/reference/native-catalog-main-7473.json`; pontosan 106 gyakorlat és 13 eredeti program. Profil/Coach/valós RIR/Normál-HIT + dupla-lineáris-RIR/GPS-térkép és egyéni programok implementációja nélkül a projekt nincs kész. Nem engedélyezett statikus vagy hamis adatú helyettesítés.
