@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">TrainPilot Native V2</string>
+    <string name="nav_home">Kezdőlap</string>
+    <string name="nav_training">Edzés</string>
+    <string name="nav_journal">Napló</string>
+    <string name="nav_health">Egészség</string>
+    <string name="nav_programs">Programok</string>
+    <string name="nav_settings">Beállítások</string>
+    <string name="nav_calendar">Naptár</string>
+    <string name="nav_coach">Coach</string>
+    <string name="nav_progress">Fejlődés</string>
+    <string name="nav_exercise_library">Gyakorlatkönyvtár</string>
+</resources>

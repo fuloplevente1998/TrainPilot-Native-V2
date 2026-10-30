@@ -1,0 +1,8 @@
+{
+  "name": "TrainPilot Native V2",
+  "description": "Natív Android és Wear OS edzéstervező, edzésnapló, Coach progressziós motor és egészség-integrációs alkalmazás felső 5+3 navigációval.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

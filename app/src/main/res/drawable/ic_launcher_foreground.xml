@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Barbell + pulse emblem in Amber Gold -->
+    <path
+        android:fillColor="#F5B841"
+        android:pathData="M28,42h8v24h-8zM72,42h8v24h-8zM22,47h5v14h-5zM81,47h5v14h-5zM36,51h36v6h-36z" />
+    <path
+        android:strokeColor="#FFD166"
+        android:strokeWidth="3"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M34,74 L46,74 L51,66 L57,80 L62,74 L74,74" />
+</vector>

@@ -2,13 +2,6 @@
 
 **Feladat:** teljesen új, használható, natív Android + Wear OS TrainPilot alkalmazást készíts Kotlin/Jetpack Compose alapon. Ez a repó egy **specifikációs indulócsomag**; kezdetben nincs benne alkalmazáskód. **A teljes alkalmazáskódot, teszteket, Gradle-t, erőforrásokat, workflow-kat és APK-kat te hozod létre**, fázisonként.
 
-## Kötelező, tételes funkcióparitási kapu (2026-10-30)
-
-A felhasználó nem fogad el egy második hiányos natív demót. **Első kötelező olvasmány**:
-- [`docs/07-TELJES_FUNKCIOPARITAS_ELFOGADAS.md`](docs/07-TELJES_FUNKCIOPARITAS_ELFOGADAS.md): profil, edzésstílusok, 0–10 RIR, Coach, 106 gyakorlat, 13 kész program, saját programok és GPS-es térkép, teljes tesztszabályok.
-- [`docs/08-KATALOGUS_ES_13_PROGRAM.md`](docs/08-KATALOGUS_ES_13_PROGRAM.md) és a **fizikai, pontos, négynyelvű adatállomány** [`data/reference/native-catalog-main-7473.json`](data/reference/native-catalog-main-7473.json). Ebből állítsd elő a V2 beépített készletét; ne kitalált csökkentett demólistát.
-- Minden funkció státusza kezdetben NOT_STARTED. UI-látvány és sikeres APK-build nem bizonyít funkcionális paritást.
-
 ## Források fontossági sorrendje
 1. `AGENTS.md` és ez a dokumentum; friss felhasználói döntés a **felső 5+3 navigációról** a `docs/01-NAVIGACIO-5-PLUS-3.md` szerint.
 2. **A négy eredeti natív mockup**: `design/mockups/REFERENCES.md`, összesen 24 tervezett nézet. A képek grafikai referenciák, NEM kész UI-képernyőfotók.
