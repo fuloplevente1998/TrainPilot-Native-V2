@@ -40,6 +40,7 @@ import com.repforge.app.nativev2.ui.screens.ProgressScreen
 import com.repforge.app.nativev2.ui.screens.ProgramsScreen
 import com.repforge.app.nativev2.ui.screens.SettingsScreen
 import com.repforge.app.nativev2.ui.screens.TrainingLandingScreen
+import com.repforge.app.nativev2.ui.screens.WorkoutDashboard
 import com.repforge.app.nativev2.ui.screens.WorkoutRouteMapModal
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotTokens
 import com.repforge.app.nativev2.ui.theme.TrainPilotTheme
@@ -177,7 +178,7 @@ fun TrainPilotAppHost(
                                             onRequestStartPlatformGps = { /* Handled by DisposableEffect */ }
                                         )
                                     } else {
-                                        TrainingLandingScreen(uiState = uiState, viewModel = viewModel)
+                                        WorkoutDashboard(uiState = uiState, viewModel = viewModel)
                                     }
                                 }
                                 TopMainTab.JOURNAL -> JournalScreen(uiState = uiState, viewModel = viewModel)

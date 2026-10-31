@@ -80,29 +80,47 @@ fun HeroSurfaceCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = LocalTrainPilotColors.current
+    val effectiveBorderWidth = when {
+        colors.isHighContrast -> 2.5.dp
+        colors.isNeonGlow -> 1.8.dp
+        colors.isMatte -> 1.dp
+        else -> 1.5.dp
+    }
+    val effectiveBorderColor = when {
+        colors.isNeonGlow -> colors.glowColor.copy(alpha = 0.85f)
+        colors.isHighContrast -> colors.borderEmphasis
+        colors.isMatte -> colors.borderSubtle
+        else -> accentColor.copy(alpha = 0.55f)
+    }
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = colors.surfacePrimaryCard),
-        border = BorderStroke(1.5.dp, accentColor.copy(alpha = 0.55f))
+        border = BorderStroke(effectiveBorderWidth, effectiveBorderColor)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .drawBehind {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                accentColor.copy(alpha = 0.16f),
-                                accentColor.copy(alpha = 0.04f),
-                                Color.Transparent
+                    if (!colors.isMatte) {
+                        val glowAlpha = if (colors.isNeonGlow) 0.32f else 0.16f
+                        val secondaryAlpha = if (colors.isNeonGlow) 0.12f else 0.04f
+                        val glowCol = if (colors.isNeonGlow) colors.glowColor else accentColor
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    glowCol.copy(alpha = glowAlpha),
+                                    glowCol.copy(alpha = secondaryAlpha),
+                                    Color.Transparent
+                                ),
+                                center = Offset(size.width * 0.88f, size.height * 0.15f),
+                                radius = size.maxDimension * 0.72f
                             ),
                             center = Offset(size.width * 0.88f, size.height * 0.15f),
                             radius = size.maxDimension * 0.72f
-                        ),
-                        center = Offset(size.width * 0.88f, size.height * 0.15f),
-                        radius = size.maxDimension * 0.72f
-                    )
+                        )
+                    }
                 }
                 .padding(contentPadding),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -112,9 +130,9 @@ fun HeroSurfaceCard(
 }
 
 /**
- * Tactile dark surface card matching 01-VISUAL_SYSTEM.md:
+ * Tactile surface card matching 01-VISUAL_SYSTEM.md:
  * - 16dp corner radius
- * - 1dp functional border (#2B3240 or highlighted border)
+ * - Respects glow, matte, high-contrast, and light themes
  */
 @Composable
 fun TactileSurfaceCard(
@@ -126,12 +144,24 @@ fun TactileSurfaceCard(
 ) {
     val colors = LocalTrainPilotColors.current
     val bgColor = if (secondarySurface) colors.surfaceSecondary else colors.surfacePrimaryCard
-    val borderColor = highlightedBorderColor ?: colors.borderSubtle
+    val borderWidth = when {
+        colors.isHighContrast -> 2.dp
+        colors.isNeonGlow && highlightedBorderColor != null -> 1.8.dp
+        highlightedBorderColor != null -> 1.5.dp
+        colors.isMatte -> 1.dp
+        else -> 1.dp
+    }
+    val borderColor = when {
+        highlightedBorderColor != null -> highlightedBorderColor
+        colors.isNeonGlow -> colors.glowColor.copy(alpha = 0.45f)
+        colors.isHighContrast -> colors.borderEmphasis
+        else -> colors.borderSubtle
+    }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor),
-        border = BorderStroke(if (highlightedBorderColor != null) 1.5.dp else 1.dp, borderColor)
+        border = BorderStroke(borderWidth, borderColor)
     ) {
         Column(
             modifier = Modifier
@@ -198,8 +228,8 @@ fun TelemetrySectionHeader(
 @Composable
 fun CircularReadinessGauge(
     score: Int?,
-    statusLabel: String,
-    subtitle: String,
+    statusLabel: String = "OPTIMÁLIS KÉSZENLÉT",
+    subtitle: String = "",
     modifier: Modifier = Modifier,
     gaugeSize: Dp = 156.dp
 ) {

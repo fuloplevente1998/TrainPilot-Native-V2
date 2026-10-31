@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -136,7 +137,43 @@ fun TrainPilotModalSheet(
 }
 
 /**
- * Signature dark-red rounded square 'X' close button (48dp touch target) matching the 1.3.71 UI.
+ * Unified signature circular dark-crimson 'X' close button (>= 48dp touch target)
+ * matching Screenshot 3 (Demo modal) and Mockup 3 (Route & modal overlays).
+ */
+@Composable
+fun UnifiedCloseButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    contentDescription: String = "Bezárás",
+    testTag: String = "unified_close_button"
+) {
+    Box(
+        modifier = modifier
+            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .clickable(role = Role.Button, onClick = onClick)
+            .testTag(testTag),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF6B1D24))
+                .border(1.2.dp, Color(0xFF992C3A), CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = contentDescription,
+                tint = Color(0xFFFFFFFF),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Signature dark-red circular 'X' close button (48dp touch target) matching the UI.
  */
 @Composable
 fun TrainPilotRedCloseButton(
@@ -145,23 +182,12 @@ fun TrainPilotRedCloseButton(
     contentDescription: String = "Bezárás",
     testTag: String = "red_close_x_button"
 ) {
-    Box(
-        modifier = modifier
-            .size(48.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF4A2026))
-            .border(1.dp, Color(0xFF7A353F), RoundedCornerShape(14.dp))
-            .clickable(role = Role.Button, onClick = onClick)
-            .testTag(testTag),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Default.Close,
-            contentDescription = contentDescription,
-            tint = Color(0xFFFFECEE),
-            modifier = Modifier.size(22.dp)
-        )
-    }
+    UnifiedCloseButton(
+        onClick = onClick,
+        modifier = modifier,
+        contentDescription = contentDescription,
+        testTag = testTag
+    )
 }
 
 /**

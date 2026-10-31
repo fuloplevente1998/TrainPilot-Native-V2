@@ -31,6 +31,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.health.connect.client.PermissionController
+import com.repforge.app.nativev2.data.health.HealthConnectSdkStatus
+import com.repforge.app.nativev2.data.health.HealthConnectSyncService
+import com.repforge.app.nativev2.ui.components.TrainPilotModalSheet
+import com.repforge.app.nativev2.ui.components.UnifiedCloseButton
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -53,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repforge.app.nativev2.domain.HealthMetricKey
@@ -83,6 +90,15 @@ fun HealthScreen(
     var metricInputValue by remember { mutableStateOf("") }
     var showRawBrowser by remember { mutableStateOf(false) }
     var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
+    var showHealthConnectWriteModal by remember { mutableStateOf(false) }
+    var hcWriteBpm by remember { mutableStateOf("72") }
+    var hcWriteSteps by remember { mutableStateOf("2500") }
+
+    val healthPermissionsLauncher = rememberLauncherForActivityResult(
+        contract = PermissionController.createRequestPermissionResultContract()
+    ) { grantedPermissions ->
+        viewModel.syncHealthData()
+    }
 
     val todayMetricsMap = remember(uiState.healthMetrics, uiState.selectedHealthDateIso) {
         uiState.healthMetrics
@@ -149,7 +165,7 @@ fun HealthScreen(
         item {
             TactileSurfaceCard(modifier = Modifier.testTag("health_sources_card")) {
                 Text(
-                    text = "◇ Adatforrások",
+                    text = "◇ Adatforrások (Health Connect & Samsung Health)",
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold
@@ -182,6 +198,12 @@ fun HealthScreen(
                     }
 
                     // Health Connect kártya
+                    val (hcStatusLabel, hcStatusColor) = when (uiState.healthConnectSdkStatus) {
+                        HealthConnectSdkStatus.AVAILABLE -> "Kapcsolva (Elérhető)" to Color(0xFF2EA043)
+                        HealthConnectSdkStatus.PROVIDER_UPDATE_REQUIRED -> "Frissítés szükséges" to Color(0xFFD29922)
+                        HealthConnectSdkStatus.UNAVAILABLE -> "Nem elérhető" to Color(0xFFF85149)
+                    }
+
                     Column(
                         modifier = Modifier
                             .weight(1f)
@@ -192,16 +214,16 @@ fun HealthScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(Color(0xFF2EA043)))
+                            Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(hcStatusColor))
                             Spacer(Modifier.width(6.dp))
                             Text("Health Connect", style = MaterialTheme.typography.labelMedium, color = colors.textPrimary, fontWeight = FontWeight.Bold)
                         }
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2EA043)))
+                            Box(modifier = Modifier.size(6.dp).clip(CircleShape).background(hcStatusColor))
                             Spacer(Modifier.width(4.dp))
-                            Text("Kapcsolva", style = MaterialTheme.typography.labelSmall, color = Color(0xFF2EA043))
+                            Text(hcStatusLabel, style = MaterialTheme.typography.labelSmall, color = hcStatusColor)
                         }
-                        Text("Utolsó frissítés:\nMa • 07:32", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
+                        Text("Olvasás/Írás: Pulzus, Lépések\nAPI 34+ / HC Service", style = MaterialTheme.typography.bodySmall, color = colors.textSecondary, fontSize = 11.sp)
                     }
                 }
 
@@ -222,13 +244,28 @@ fun HealthScreen(
                         Text("Frissítés", fontWeight = FontWeight.Bold)
                     }
                     OutlinedButton(
-                        onClick = { viewModel.selectMinorDestination(com.repforge.app.nativev2.domain.TopMinorDestination.SETTINGS) },
+                        onClick = {
+                            runCatching {
+                                healthPermissionsLauncher.launch(HealthConnectSyncService.REQUIRED_PERMISSIONS)
+                            }
+                        },
                         modifier = Modifier
-                            .weight(1.3f)
+                            .weight(1.2f)
                             .defaultMinSize(minHeight = 48.dp)
                             .testTag("health_open_permissions_button")
                     ) {
-                        Text("Egészségügyi engedélyek ↗", maxLines = 1)
+                        Text("Engedélyek ↗", maxLines = 1)
+                    }
+                    OutlinedButton(
+                        onClick = { showHealthConnectWriteModal = true },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("health_write_modal_button")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Rögzítés", maxLines = 1)
                     }
                 }
             }
@@ -501,51 +538,177 @@ fun HealthScreen(
 
     val currentEditing = editingMetric
     if (currentEditing != null) {
-        AlertDialog(
-            onDismissRequest = { editingMetric = null },
-            title = { Text("${currentEditing.id} • ${currentEditing.labelHu}") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Forrás: ${uiState.selectedHealthProvider.label} • Dátum: ${uiState.selectedHealthDateIso}")
-                    OutlinedTextField(
-                        value = metricInputValue,
-                        onValueChange = { metricInputValue = it },
-                        label = { Text("Érték (${currentEditing.unit})") },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        modifier = Modifier.testTag("health_metric_value_input")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        metricInputValue.replace(',', '.').toDoubleOrNull()?.let { num ->
-                            viewModel.recordHealthMetricEntry(
-                                dateIso = uiState.selectedHealthDateIso,
-                                metricKey = currentEditing,
-                                valueNumber = num,
-                                source = uiState.selectedHealthProvider
-                            )
-                        }
-                        editingMetric = null
-                    },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("health_metric_save_button")
+        TrainPilotModalSheet(
+            title = "${currentEditing.id} • ${currentEditing.labelHu}",
+            onDismiss = { editingMetric = null },
+            closeButtonTag = "health_metric_close_button",
+            footer = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Mentés")
-                }
-            },
-            dismissButton = {
-                OutlinedButton(
-                    onClick = { editingMetric = null },
-                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-                ) {
-                    Text("Mégse")
+                    OutlinedButton(
+                        onClick = { editingMetric = null },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text("Mégse")
+                    }
+                    Button(
+                        onClick = {
+                            metricInputValue.replace(',', '.').toDoubleOrNull()?.let { num ->
+                                viewModel.recordHealthMetricEntry(
+                                    dateIso = uiState.selectedHealthDateIso,
+                                    metricKey = currentEditing,
+                                    valueNumber = num,
+                                    source = uiState.selectedHealthProvider
+                                )
+                            }
+                            editingMetric = null
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.Black),
+                        modifier = Modifier
+                            .weight(1.2f)
+                            .defaultMinSize(minHeight = 48.dp)
+                            .testTag("health_metric_save_button")
+                    ) {
+                        Text("Mentés", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
-        )
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Forrás: ${uiState.selectedHealthProvider.label} • Dátum: ${uiState.selectedHealthDateIso}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+                OutlinedTextField(
+                    value = metricInputValue,
+                    onValueChange = { metricInputValue = it },
+                    label = { Text("Érték (${currentEditing.unit})") },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("health_metric_value_input")
+                )
+            }
+        }
+    }
+
+    if (showHealthConnectWriteModal) {
+        TrainPilotModalSheet(
+            title = "Health Connect adatrögzítés",
+            onDismiss = { showHealthConnectWriteModal = false },
+            closeButtonTag = "health_write_close_button",
+            footer = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { showHealthConnectWriteModal = false },
+                        modifier = Modifier
+                            .weight(1f)
+                            .defaultMinSize(minHeight = 48.dp)
+                    ) {
+                        Text("Bezárás")
+                    }
+                }
+            }
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(
+                    text = "Valós pulzus (HeartRateRecord) és lépésszám (StepsRecord) írása a Health Connect tárba:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+
+                // Pulzus írás
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceSecondary)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Pulzusminta rögzítése (HeartRateRecord)", fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = hcWriteBpm,
+                            onValueChange = { hcWriteBpm = it },
+                            label = { Text("Pulzus (bpm)") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("hc_write_bpm_input")
+                        )
+                        Button(
+                            onClick = {
+                                val bpm = hcWriteBpm.toLongOrNull() ?: 72L
+                                viewModel.writeHeartRateToHealthConnect(bpm)
+                                showHealthConnectWriteModal = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.Black),
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("hc_write_bpm_submit_button")
+                        ) {
+                            Text("Írás (HR)", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
+                // Lépésszám írás
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(colors.surfaceSecondary)
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text("Lépésszám rögzítése (StepsRecord)", fontWeight = FontWeight.Bold, color = colors.textPrimary)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = hcWriteSteps,
+                            onValueChange = { hcWriteSteps = it },
+                            label = { Text("Lépésszám") },
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("hc_write_steps_input")
+                        )
+                        Button(
+                            onClick = {
+                                val steps = hcWriteSteps.toLongOrNull() ?: 1000L
+                                viewModel.writeStepsToHealthConnect(steps)
+                                showHealthConnectWriteModal = false
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.Black),
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("hc_write_steps_submit_button")
+                        ) {
+                            Text("Írás (Lépés)", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -825,12 +988,16 @@ fun CoachScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Gyakorlatonkénti progressziós javaslatok:",
+                    text = "Gyakorlatonkénti progresszió:",
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f, fill = false),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 if (activeProg != null) {
+                    Spacer(Modifier.width(8.dp))
                     Surface(
                         shape = RoundedCornerShape(999.dp),
                         color = colors.accentSoft,
@@ -840,7 +1007,9 @@ fun CoachScreen(
                             text = "${activeProg.progressionType} • +${activeProg.loadIncrementKg} kg",
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                             style = TrainPilotTelemetryTypography.badgePill,
-                            color = colors.accent
+                            color = colors.accent,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }

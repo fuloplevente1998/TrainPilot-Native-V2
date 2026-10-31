@@ -81,6 +81,7 @@ import com.repforge.app.nativev2.ui.TrainPilotViewModel
 import com.repforge.app.nativev2.ui.components.EpleyTrendLineChart
 import com.repforge.app.nativev2.ui.components.MuscleLoadDistributionCard
 import com.repforge.app.nativev2.ui.components.TactileSurfaceCard
+import com.repforge.app.nativev2.ui.components.UnifiedCloseButton
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotColors
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotTokens
 import com.repforge.app.nativev2.ui.theme.TrainPilotTelemetryTypography
@@ -611,22 +612,12 @@ fun WorkoutRouteMapModal(
                     )
                 }
 
-                // Mandatory 48dp Red 'X' close button that ONLY closes the modal (B12 / V15)
-                IconButton(
+                // Unified signature circular dark-red 'X' close button (B12 / V15)
+                UnifiedCloseButton(
                     onClick = onCloseOnly,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(tokens.danger)
-                        .border(1.5.dp, colors.semanticDanger, CircleShape)
-                        .testTag("route_map_close_x")
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Térkép bezárása (mérés folytatódik)",
-                        tint = colors.semanticDanger
-                    )
-                }
+                    contentDescription = "Térkép bezárása (mérés folytatódik)",
+                    testTag = "route_map_close_x"
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))

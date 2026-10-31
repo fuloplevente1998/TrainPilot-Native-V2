@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -63,9 +65,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repforge.app.nativev2.domain.ActiveExerciseModel
@@ -86,6 +90,18 @@ import com.repforge.app.nativev2.ui.components.TactileSurfaceCard
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotColors
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotTokens
 import com.repforge.app.nativev2.ui.theme.TrainPilotTelemetryTypography
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.repforge.app.nativev2.ui.components.UnifiedCloseButton
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -137,7 +153,16 @@ fun ActiveWorkoutPanel(
     val elapsedMm = (draft.elapsedActiveSeconds / 60).toString().padStart(2, '0')
     val elapsedSs = (draft.elapsedActiveSeconds % 60).toString().padStart(2, '0')
     val completedSetsCount = draft.exercises.sumOf { ex -> ex.sets.count { it.isCompleted } }
-    val totalSetsCount = draft.exercises.sumOf { it.sets.size }
+    val totalSetsCount = draft.exercises.sumOf { it.sets.size }.coerceAtLeast(1)
+    val totalExercisesCount = draft.exercises.size.coerceAtLeast(1)
+    val currentExerciseNumber = draft.currentExerciseIndex + 1
+    val nextExercise = draft.exercises.getOrNull(draft.currentExerciseIndex + 1)
+
+    var showExerciseDemo by remember { mutableStateOf(false) }
+    var coachProgressionExpanded by remember { mutableStateOf(false) }
+    var autoAdvanceMode by remember { mutableStateOf(draft.intervalConfig.autoAdvance) }
+    var exerciseRating by remember { mutableStateOf(3) }
+    var exercisePainReported by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -147,62 +172,241 @@ fun ActiveWorkoutPanel(
             .testTag("screen_active_workout_v07_v12"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Header: Title, Elapsed Telemetry, Undo button (B04), and Finish Modal trigger (V12)
+        // Main branch style: Top ownership pill "(•) A telefon vezérli az edzést ∨"
+        item {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(20.dp))
+                    .clickable { showWearPanel = !showWearPanel }
+                    .testTag("workout_ownership_pill"),
+                shape = RoundedCornerShape(20.dp),
+                color = colors.surfaceSecondary,
+                border = BorderStroke(1.dp, colors.borderSubtle)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(colors.accent)
+                        )
+                        Text(
+                            text = if (draft.timerOwner == SessionOwner.PHONE)
+                                "A telefon vezérli az edzést"
+                            else
+                                "Az óra vezérli az edzést",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = colors.textPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                    Icon(
+                        imageVector = if (showWearPanel) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Óra átadás lenyitása",
+                        tint = colors.textSecondary
+                    )
+                }
+            }
+        }
+
+        // Main branch style: Prominent Exercise Hero Card with Coach, Demo, Progress Bar & Watch Telemetry
         item {
             HeroSurfaceCard(accentColor = colors.accent) {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Top row: Program • Day & Exercise count + Elapsed timer
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${draft.title} • ${currentExercise?.muscleGroup ?: "Gyakorlat"}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.textSecondary,
+                            modifier = Modifier.weight(1f)
+                        )
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = colors.surfaceSecondary,
-                                border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.55f))
-                            ) {
-                                Text(
-                                    text = "$elapsedMm:$elapsedSs",
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                    style = TrainPilotTelemetryTypography.badgePill,
-                                    color = colors.accent
-                                )
-                            }
                             Text(
-                                text = "$completedSetsCount / $totalSetsCount SZETT KÉSZ",
-                                style = TrainPilotTelemetryTypography.badgePill,
-                                color = colors.semanticSuccess
+                                text = "$currentExerciseNumber/$totalExercisesCount",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = colors.accent,
+                                fontWeight = FontWeight.ExtraBold
+                            )
+                            Text(
+                                text = "⏱ $elapsedMm:$elapsedSs",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textMuted
                             )
                         }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = draft.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = colors.textPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Tulajdonos: ${draft.timerOwner.name} (epoch ${draft.ownerEpoch})",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = colors.textSecondary
+                    }
+
+                    // Bold large exercise title
+                    Text(
+                        text = currentExercise?.name ?: draft.title,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Target prescription
+                    Text(
+                        text = "Cél: ${currentExercise?.sets?.size ?: 3} × 8–12 / ${currentExercise?.prescriptionNote?.ifBlank { "széria" } ?: "sorozat"}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = colors.accent,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Expandable PROGRESSZIÓ / COACH box
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { coachProgressionExpanded = !coachProgressionExpanded },
+                        shape = RoundedCornerShape(12.dp),
+                        color = colors.surfaceSecondary,
+                        border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.45f))
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text(
+                                        text = "PROGRESSZIÓ / COACH",
+                                        style = TrainPilotTelemetryTypography.badgePill,
+                                        color = colors.accent
+                                    )
+                                    Text(
+                                        text = if (exercisePainReported)
+                                            "Fájdalomjelzés – nincs terhelésnövelés"
+                                        else
+                                            "Normál progresszió tartása",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = colors.textPrimary,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (coachProgressionExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = colors.textSecondary
+                                )
+                            }
+                            if (coachProgressionExpanded) {
+                                Text(
+                                    text = "Mai javaslat",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = colors.accent,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "A mai regenerációs jelzés alapján tartsd a terhelést, célozz 2–3 RIR-t és figyelj a kontrollált negatív szakaszra.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    // "Bemutató / leírás >" clickable card
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { showExerciseDemo = true }
+                            .testTag("exercise_demo_card_trigger"),
+                        shape = RoundedCornerShape(12.dp),
+                        color = colors.surfaceSecondary,
+                        border = BorderStroke(1.dp, colors.borderSubtle)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Bemutató / leírás",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = colors.accent,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Bemutató megnyitása",
+                                tint = colors.accent
+                            )
+                        }
+                    }
+
+                    // Progress Bar
+                    val overallProgress = (completedSetsCount.toFloat() / totalSetsCount.toFloat()).coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(999.dp))
+                            .background(colors.surfacePrimaryCard)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(overallProgress)
+                                .fillMaxHeight()
+                                .clip(RoundedCornerShape(999.dp))
+                                .background(colors.accent)
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    // Watch measurement footer line
+                    Text(
+                        text = "Órás mérés • Mérés folyamatban (${draft.liveHeartRateBpm ?: 75} bpm)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textMuted
+                    )
+
+                    // Toolbar actions: Undo (B04), Finish Modal (V12)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         if (draft.lastUndoAction != null) {
                             OutlinedButton(
                                 onClick = { viewModel.undoLastSetAction() },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                                 modifier = Modifier
+                                    .weight(1f)
                                     .defaultMinSize(minHeight = 48.dp)
                                     .testTag("workout_undo_last_set_button")
                             ) {
-                                Icon(Icons.Default.Undo, contentDescription = null)
+                                Icon(Icons.Default.Undo, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
-                                Text(strings.undoLastSetCta)
+                                Text(
+                                    text = "Visszavonás",
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
                             }
                         }
 
@@ -210,57 +414,67 @@ fun ActiveWorkoutPanel(
                             onClick = { viewModel.openFinishWorkoutModal() },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = colors.semanticSuccess,
-                                contentColor = tokens.onAccent
+                                contentColor = Color.Black
                             ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                             modifier = Modifier
-                                .defaultMinSize(minHeight = 52.dp)
+                                .then(
+                                    if (draft.lastUndoAction != null) Modifier.weight(1.3f)
+                                    else Modifier.fillMaxWidth()
+                                )
+                                .defaultMinSize(minHeight = 48.dp)
                                 .testTag("workout_open_finish_modal_button")
                         ) {
-                            Icon(Icons.Default.Check, contentDescription = null)
+                            Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(strings.finishWorkoutCta, fontWeight = FontWeight.Bold)
+                            Text(
+                                text = strings.finishWorkoutCta,
+                                fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
-                }
 
-                // Quick Toolbar: Interval (V11), Wear Handoff (V20), Private Photos (V23), Add Exercise (V05)
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    FilterChip(
-                        selected = showIntervalEditor,
-                        onClick = { showIntervalEditor = !showIntervalEditor },
-                        label = { Text("Intervallum (${draft.intervalConfig.workSeconds}/${draft.intervalConfig.restSeconds}s)") },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("toggle_interval_panel_chip")
-                    )
-                    FilterChip(
-                        selected = showWearPanel,
-                        onClick = { showWearPanel = !showWearPanel },
-                        label = { Text("Óra átadás (${draft.timerOwner.name})") },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("toggle_wear_handoff_chip")
-                    )
-                    FilterChip(
-                        selected = showPhotosPanel,
-                        onClick = { showPhotosPanel = !showPhotosPanel },
-                        label = { Text("Privát fotók") },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("toggle_private_photos_chip")
-                    )
-                    OutlinedButton(
-                        onClick = { viewModel.openSubDestination(SubDestination.EXERCISE_LIBRARY) },
-                        modifier = Modifier
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("workout_add_exercise_from_library")
+                    // Quick Toolbar: Interval (V11), Wear Handoff (V20), Private Photos (V23), Add Exercise (V05)
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Gyakorlat")
+                        FilterChip(
+                            selected = showIntervalEditor,
+                            onClick = { showIntervalEditor = !showIntervalEditor },
+                            label = { Text("Intervallum (${draft.intervalConfig.workSeconds}/${draft.intervalConfig.restSeconds}s)") },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("toggle_interval_panel_chip")
+                        )
+                        FilterChip(
+                            selected = showWearPanel,
+                            onClick = { showWearPanel = !showWearPanel },
+                            label = { Text("Óra átadás (${draft.timerOwner.name})") },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("toggle_wear_handoff_chip")
+                        )
+                        FilterChip(
+                            selected = showPhotosPanel,
+                            onClick = { showPhotosPanel = !showPhotosPanel },
+                            label = { Text("Privát fotók") },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("toggle_private_photos_chip")
+                        )
+                        OutlinedButton(
+                            onClick = { viewModel.openSubDestination(SubDestination.EXERCISE_LIBRARY) },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("workout_add_exercise_from_library")
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Gyakorlat")
+                        }
                     }
                 }
             }
@@ -375,6 +589,208 @@ fun ActiveWorkoutPanel(
                 )
             }
         }
+
+        // Main branch style: Next Exercise Preview Card (2/6)
+        if (nextExercise != null) {
+            item {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable { viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex + 1) }
+                        .testTag("next_exercise_preview_card"),
+                    shape = RoundedCornerShape(14.dp),
+                    color = colors.surfaceSecondary,
+                    border = BorderStroke(1.dp, colors.borderSubtle)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = "KÖVETKEZŐ GYAKORLAT • ${currentExerciseNumber + 1}/$totalExercisesCount",
+                            style = TrainPilotTelemetryTypography.badgePill,
+                            color = colors.textSecondary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = nextExercise.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.textPrimary
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = colors.textSecondary
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Main branch style: 5-scale effort rating + Pain button + Auto mode + Prev/Next buttons
+        item {
+            TactileSurfaceCard(
+                modifier = Modifier.testTag("exercise_bottom_controls_card")
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "Milyen nehéz volt ez a gyakorlat?",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary
+                    )
+
+                    // 5-scale effort rating (1..5)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            1 to "1\nTúl könnyű",
+                            2 to "2\nKicsit könnyű",
+                            3 to "3\nPont jó",
+                            4 to "4\nKicsit nehéz",
+                            5 to "5\nTúl nehéz"
+                        ).forEach { (score, label) ->
+                            val isSelected = exerciseRating == score
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .clickable { exerciseRating = score },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) colors.accentSoft else colors.surfaceSecondary,
+                                border = BorderStroke(1.dp, if (isSelected) colors.accent else colors.borderSubtle)
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 8.dp, horizontal = 2.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = if (isSelected) colors.accent else colors.textSecondary,
+                                        textAlign = TextAlign.Center,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Pain toggle button
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { exercisePainReported = !exercisePainReported },
+                        shape = RoundedCornerShape(10.dp),
+                        color = if (exercisePainReported) colors.semanticDanger.copy(alpha = 0.2f) else colors.surfaceSecondary,
+                        border = BorderStroke(1.dp, if (exercisePainReported) colors.semanticDanger else colors.borderSubtle)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "Fájdalom / kellemetlenség",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (exercisePainReported) colors.semanticDanger else colors.textPrimary,
+                                fontWeight = if (exercisePainReported) FontWeight.Bold else FontWeight.Normal
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(12.dp)
+                                    .clip(CircleShape)
+                                    .background(if (exercisePainReported) colors.semanticDanger else colors.textMuted)
+                            )
+                        }
+                    }
+
+                    // Bottom Navigation Bar: Automata mód + Előző / Következő gyakorlat
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = autoAdvanceMode,
+                            onCheckedChange = { autoAdvanceMode = it },
+                            modifier = Modifier.testTag("exercise_auto_mode_checkbox")
+                        )
+                        Text(
+                            text = "Automata mód",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = colors.textPrimary
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                if (draft.currentExerciseIndex > 0) {
+                                    viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex - 1)
+                                }
+                            },
+                            enabled = draft.currentExerciseIndex > 0,
+                            modifier = Modifier
+                                .weight(1f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("exercise_prev_button")
+                        ) {
+                            Text("Előző gyakorlat")
+                        }
+
+                        Button(
+                            onClick = {
+                                if (draft.currentExerciseIndex < draft.exercises.size - 1) {
+                                    viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex + 1)
+                                } else {
+                                    viewModel.openFinishWorkoutModal()
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = colors.accent,
+                                contentColor = tokens.onAccent
+                            ),
+                            modifier = Modifier
+                                .weight(1.3f)
+                                .defaultMinSize(minHeight = 48.dp)
+                                .testTag("exercise_next_button")
+                        ) {
+                            Text(
+                                text = if (draft.currentExerciseIndex < draft.exercises.size - 1)
+                                    "Következő gyakorlat"
+                                else
+                                    "Edzés befejezése",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Exercise Demo Modal (Screenshot 3 style with Scott Herman Fitness & UnifiedCloseButton)
+    if (showExerciseDemo && currentExercise != null) {
+        ExerciseDemoDialog(
+            exercise = currentExercise,
+            onDismiss = { showExerciseDemo = false }
+        )
     }
 
     // V12: Finish Workout Modal (G07: Effort choices are visual selection only; Save commits)
@@ -501,48 +917,59 @@ private fun RestTimerCard(
         ) {
             OutlinedButton(
                 onClick = onMinus15,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .defaultMinSize(minHeight = 44.dp)
                     .testTag("rest_timer_minus_15")
             ) {
-                Text("-15 mp")
+                Text("-15 mp", maxLines = 1, softWrap = false, fontSize = 12.sp)
             }
             Button(
                 onClick = onTogglePause,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = colors.accent,
-                    contentColor = tokens.onAccent
+                    contentColor = Color.Black
                 ),
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 modifier = Modifier
-                    .weight(1.2f)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .weight(1.3f)
+                    .defaultMinSize(minHeight = 44.dp)
                     .testTag("rest_timer_pause_resume")
             ) {
                 Icon(
                     imageVector = if (isPaused) Icons.Default.PlayArrow else Icons.Default.Pause,
-                    contentDescription = null
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(if (isPaused) "Folytatás" else "Szünet", fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.width(2.dp))
+                Text(
+                    text = if (isPaused) "Folytatás" else "Szünet",
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    fontSize = 12.sp
+                )
             }
             OutlinedButton(
                 onClick = onPlus15,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 modifier = Modifier
                     .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .defaultMinSize(minHeight = 44.dp)
                     .testTag("rest_timer_plus_15")
             ) {
-                Text("+15 mp")
+                Text("+15 mp", maxLines = 1, softWrap = false, fontSize = 12.sp)
             }
             OutlinedButton(
                 onClick = onSkip,
+                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
                 modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
+                    .weight(1.1f)
+                    .defaultMinSize(minHeight = 44.dp)
                     .testTag("rest_timer_skip")
             ) {
-                Text("Átugrás")
+                Text("Átugrás", maxLines = 1, softWrap = false, fontSize = 12.sp)
             }
         }
     }
@@ -654,6 +1081,33 @@ private fun CurrentExerciseSetsCard(
             )
         }
 
+        // Main branch style: "Sorozatok" table header
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = "Sorozatok",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = colors.textPrimary
+            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("#", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.width(34.dp), textAlign = TextAlign.Center)
+                Text("Előző", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.width(60.dp), textAlign = TextAlign.Center)
+                Text("kg/kar", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Text("/láb", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.weight(1f), textAlign = TextAlign.Center)
+                Text("RIR", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.width(44.dp), textAlign = TextAlign.Center)
+                Text("✓", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.width(52.dp), textAlign = TextAlign.Center)
+                Text("—", style = MaterialTheme.typography.labelSmall, color = colors.textMuted, modifier = Modifier.width(40.dp), textAlign = TextAlign.Center)
+            }
+        }
+
         // Sets List
         exercise.sets.forEachIndexed { setIdx, setEntry ->
             AdaptiveSetRow(
@@ -665,34 +1119,22 @@ private fun CurrentExerciseSetsCard(
             )
         }
 
-        // + Sorozat / - Sorozat Controls
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // + Sorozat hozzáadása Button (main branch style)
+        Button(
+            onClick = { viewModel.addSetToExercise(exercise.exerciseId) },
+            colors = ButtonDefaults.buttonColors(
+                containerColor = colors.surfaceSecondary,
+                contentColor = colors.accent
+            ),
+            border = BorderStroke(1.dp, colors.borderEmphasis),
+            modifier = Modifier
+                .fillMaxWidth()
+                .defaultMinSize(minHeight = 48.dp)
+                .testTag("add_set_button_${exercise.exerciseId}")
         ) {
-            OutlinedButton(
-                onClick = { viewModel.addSetToExercise(exercise.exerciseId) },
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("add_set_button_${exercise.exerciseId}")
-            ) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("+ Sorozat")
-            }
-            OutlinedButton(
-                onClick = { viewModel.removeLastSetFromExercise(exercise.exerciseId) },
-                enabled = exercise.sets.size > 1,
-                modifier = Modifier
-                    .weight(1f)
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("remove_set_button_${exercise.exerciseId}")
-            ) {
-                Icon(Icons.Default.Remove, contentDescription = null)
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("- Sorozat")
-            }
+            Icon(Icons.Default.Add, contentDescription = null, tint = colors.accent)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("+ Sorozat hozzáadása", fontWeight = FontWeight.Bold, color = colors.accent)
         }
     }
 }
@@ -1031,15 +1473,20 @@ private fun AdaptiveSetRow(
         TrainPilotEngines.estimateEpley1Rm(setEntry.weightKg, setEntry.reps)
     } else 0.0
 
+    val prevDisplay = if (setEntry.weightKg > 0) {
+        val wStr = if (setEntry.weightKg % 1.0 == 0.0) setEntry.weightKg.toInt().toString() else setEntry.weightKg.toString()
+        "${wStr}×${setEntry.reps}"
+    } else "—"
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(
                 when {
-                    setEntry.isCompleted -> colors.accentSoft
-                    setEntry.isWarmupSet -> colors.surfaceSecondary.copy(alpha = 0.75f)
-                    else -> colors.surfaceSecondary
+                    setEntry.isCompleted -> colors.accentSoft.copy(alpha = 0.5f)
+                    setEntry.isWarmupSet -> colors.surfaceSecondary.copy(alpha = 0.65f)
+                    else -> colors.surfaceSecondary.copy(alpha = 0.45f)
                 }
             )
             .border(
@@ -1049,65 +1496,183 @@ private fun AdaptiveSetRow(
                     setEntry.isWarmupSet -> colors.semanticWarning.copy(alpha = 0.6f)
                     else -> colors.borderSubtle
                 },
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(12.dp)
             )
-            .padding(12.dp)
+            .padding(vertical = 6.dp, horizontal = 4.dp)
             .testTag("set_row_${exerciseId}_$setIndex"),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
+        // Main branch table row: # | Előző | kg/kar | /láb | RIR | OK | —
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+            // Sorszám kör (sárga kerek háttér, fekete szám)
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(CircleShape)
+                    .background(if (setEntry.isWarmupSet) colors.semanticWarning else colors.accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "${setEntry.setNumber}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = colors.backgroundPrimary
+                )
+            }
+
+            // Előző érték (szürke szöveg)
+            Text(
+                text = prevDisplay,
+                style = MaterialTheme.typography.bodySmall,
+                color = colors.textMuted,
+                modifier = Modifier.width(55.dp),
+                textAlign = TextAlign.Center
+            )
+
+            // Input: kg / kar (súly)
+            if (loadType == ExerciseLoadType.REPS_WEIGHT) {
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(8.dp),
+                    color = colors.surfacePrimaryCard,
+                    border = BorderStroke(1.dp, colors.borderSubtle)
                 ) {
-                    Text(
-                        text = if (setEntry.isWarmupSet)
-                            "Bemelegítő #${setEntry.setNumber}"
-                        else
-                            "${setEntry.setNumber}. sorozat",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (setEntry.isCompleted) colors.semanticSuccess else colors.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (setEntry.isManuallyEdited) {
-                        Text(
-                            text = "• SZERKESZTETT",
-                            style = TrainPilotTelemetryTypography.badgePill.copy(fontSize = 10.sp),
-                            color = colors.accent
+                    Box(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        BasicTextField(
+                            value = weightText,
+                            onValueChange = { raw ->
+                                weightText = raw
+                                raw.replace(',', '.').toDoubleOrNull()?.let { kg ->
+                                    viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = kg, reps = null, rir = null)
+                                }
+                            },
+                            textStyle = TrainPilotTelemetryTypography.tableCellNumeric.copy(
+                                color = colors.textPrimary,
+                                textAlign = TextAlign.Center
+                            ),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            singleLine = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("set_weight_input_${exerciseId}_$setIndex")
                         )
                     }
                 }
-                if (estimated1Rm > 0.0) {
-                    Text(
-                        text = "Becsült Epley 1RM: $estimated1Rm kg • Volumen: ${(setEntry.weightKg * setEntry.reps).toInt()} kg",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.textSecondary
+            } else {
+                Spacer(modifier = Modifier.weight(1f))
+            }
+
+            // Input: /láb vagy ismétlés
+            Surface(
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp),
+                color = colors.surfacePrimaryCard,
+                border = BorderStroke(1.dp, colors.borderSubtle)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BasicTextField(
+                        value = repsText,
+                        onValueChange = { raw ->
+                            repsText = raw
+                            raw.toIntOrNull()?.let { r ->
+                                viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = null, reps = r, rir = null)
+                            }
+                        },
+                        textStyle = TrainPilotTelemetryTypography.tableCellNumeric.copy(
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("set_reps_input_${exerciseId}_$setIndex")
                     )
                 }
             }
 
+            // Input: RIR
+            Surface(
+                modifier = Modifier.width(44.dp),
+                shape = RoundedCornerShape(8.dp),
+                color = colors.surfacePrimaryCard,
+                border = BorderStroke(1.dp, colors.borderSubtle)
+            ) {
+                Box(
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    BasicTextField(
+                        value = rirText,
+                        onValueChange = { raw ->
+                            rirText = raw
+                            val parsed = raw.toIntOrNull()
+                            viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = null, reps = null, rir = parsed)
+                        },
+                        textStyle = TrainPilotTelemetryTypography.tableCellNumeric.copy(
+                            color = colors.textPrimary,
+                            textAlign = TextAlign.Center
+                        ),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("set_rir_input_${exerciseId}_$setIndex")
+                    )
+                }
+            }
+
+            // OK gomb (ha kész, zöld pipa, ha nem, sötét OK gomb)
             Button(
                 onClick = { viewModel.toggleSetCompleted(exerciseId, setEntry.setId) },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (setEntry.isCompleted) colors.semanticSuccess else colors.accent,
-                    contentColor = tokens.onAccent
+                    containerColor = if (setEntry.isCompleted) colors.semanticSuccess else colors.surfacePrimaryCard,
+                    contentColor = if (setEntry.isCompleted) tokens.onAccent else colors.textPrimary
                 ),
+                border = BorderStroke(1.dp, if (setEntry.isCompleted) colors.semanticSuccess else colors.borderEmphasis),
+                shape = RoundedCornerShape(8.dp),
                 modifier = Modifier
-                    .defaultMinSize(minWidth = 76.dp, minHeight = 48.dp)
+                    .width(52.dp)
+                    .defaultMinSize(minHeight = 38.dp)
                     .testTag("complete_set_btn_${exerciseId}_$setIndex")
             ) {
-                Icon(Icons.Default.Check, contentDescription = "Sorozat kész")
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(if (setEntry.isCompleted) "Kész" else "OK", fontWeight = FontWeight.Bold)
+                if (setEntry.isCompleted) {
+                    Icon(Icons.Default.Check, contentDescription = "Kész", modifier = Modifier.size(16.dp))
+                } else {
+                    Text("OK", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            // Piros kör gomb a sorozat törléséhez (—)
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(androidx.compose.ui.graphics.Color(0xFF6B1D24))
+                    .border(1.dp, androidx.compose.ui.graphics.Color(0xFF992C3A), CircleShape)
+                    .clickable { viewModel.removeLastSetFromExercise(exerciseId) },
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "—",
+                    color = androidx.compose.ui.graphics.Color.White,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp
+                )
             }
         }
 
-        // Tactile quick steppers for rapid 1-handed gym operation (-2.5/+2.5 kg, -1/+1 rep)
+        // Quick steppers & RIR pills row
         if (loadType == ExerciseLoadType.REPS_WEIGHT || loadType == ExerciseLoadType.BODYWEIGHT) {
             Row(
                 modifier = Modifier
@@ -1138,12 +1703,11 @@ private fun AdaptiveSetRow(
                     testTag = "step_reps_plus_${exerciseId}_$setIndex",
                     onClick = { viewModel.stepSetReps(exerciseId, setEntry.setId, 1) }
                 )
-                // Quick RIR pills (0, 1, 2, 3)
                 listOf(0, 1, 2, 3).forEach { rirVal ->
                     val isSelectedRir = setEntry.rir == rirVal
                     Surface(
                         modifier = Modifier
-                            .defaultMinSize(minHeight = 36.dp)
+                            .defaultMinSize(minHeight = 32.dp)
                             .clip(RoundedCornerShape(8.dp))
                             .clickable {
                                 viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = null, reps = null, rir = rirVal)
@@ -1153,7 +1717,7 @@ private fun AdaptiveSetRow(
                         border = BorderStroke(1.dp, if (isSelectedRir) colors.accent else colors.borderSubtle)
                     ) {
                         Box(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -1164,92 +1728,11 @@ private fun AdaptiveSetRow(
                         }
                     }
                 }
-            }
-        }
-
-        // Adaptive FlowRow for inputs so narrow 320dp + 2.0x font scale wraps cleanly without clipping
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            when (loadType) {
-                ExerciseLoadType.REPS_WEIGHT, ExerciseLoadType.BODYWEIGHT, ExerciseLoadType.REPS_ONLY -> {
-                    if (loadType == ExerciseLoadType.REPS_WEIGHT) {
-                        OutlinedTextField(
-                            value = weightText,
-                            onValueChange = { raw ->
-                                weightText = raw
-                                raw.replace(',', '.').toDoubleOrNull()?.let { kg ->
-                                    viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = kg, reps = null, rir = null)
-                                }
-                            },
-                            label = { Text("Súly (kg)") },
-                            singleLine = true,
-                            textStyle = TrainPilotTelemetryTypography.tableCellNumeric,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                            modifier = Modifier
-                                .width(115.dp)
-                                .testTag("set_weight_input_${exerciseId}_$setIndex")
-                        )
-                    }
-                    OutlinedTextField(
-                        value = repsText,
-                        onValueChange = { raw ->
-                            repsText = raw
-                            raw.toIntOrNull()?.let { r ->
-                                viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = null, reps = r, rir = null)
-                            }
-                        },
-                        label = { Text("Ismétlés") },
-                        singleLine = true,
-                        textStyle = TrainPilotTelemetryTypography.tableCellNumeric,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier
-                            .width(105.dp)
-                            .testTag("set_reps_input_${exerciseId}_$setIndex")
-                    )
-                    OutlinedTextField(
-                        value = rirText,
-                        onValueChange = { raw ->
-                            rirText = raw
-                            val parsed = raw.toIntOrNull()
-                            viewModel.editSetValues(exerciseId, setEntry.setId, weightKg = null, reps = null, rir = parsed)
-                        },
-                        label = { Text("RIR (0-10)") },
-                        singleLine = true,
-                        textStyle = TrainPilotTelemetryTypography.tableCellNumeric,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier
-                            .width(105.dp)
-                            .testTag("set_rir_input_${exerciseId}_$setIndex")
-                    )
-                }
-
-                ExerciseLoadType.TIMED_UNILATERAL -> {
+                if (estimated1Rm > 0.0) {
                     Text(
-                        text = "Időtartam: ${setEntry.durationSeconds} mp",
-                        style = TrainPilotTelemetryTypography.tableCellNumeric,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
-                ExerciseLoadType.TIMED_BILATERAL -> {
-                    Text(
-                        text = "Bal: ${setEntry.leftSeconds} mp • Jobb: ${setEntry.rightSeconds} mp",
-                        style = TrainPilotTelemetryTypography.tableCellNumeric,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
-                }
-
-                ExerciseLoadType.DISTANCE_TIME -> {
-                    Text(
-                        text = "Távolság: ${setEntry.distanceMeters.toInt()} m • Idő: ${setEntry.durationSeconds} mp",
-                        style = TrainPilotTelemetryTypography.tableCellNumeric,
-                        color = colors.textPrimary,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        text = "1RM: $estimated1Rm kg",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textMuted
                     )
                 }
             }
@@ -1582,11 +2065,22 @@ private fun FinishWorkoutModalDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = "Edzés lezárása és naplózása (V12)",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Edzés lezárása és naplózása",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                UnifiedCloseButton(
+                    onClick = onDismiss,
+                    contentDescription = "Bezárás"
+                )
+            }
         },
         text = {
             Column(
@@ -1725,4 +2219,147 @@ private fun FinishWorkoutModalDialog(
             }
         }
     )
+}
+
+@Composable
+private fun ExerciseDemoDialog(
+    exercise: ActiveExerciseModel,
+    onDismiss: () -> Unit
+) {
+    val colors = LocalTrainPilotColors.current
+    val tokens = LocalTrainPilotTokens.current
+    val context = LocalContext.current
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .clip(RoundedCornerShape(20.dp))
+                .border(1.dp, colors.borderEmphasis, RoundedCornerShape(20.dp))
+                .testTag("exercise_demo_dialog"),
+            color = colors.surfacePrimaryCard,
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(18.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                // Header with title and UnifiedCloseButton
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = exercise.name,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.textPrimary
+                        )
+                        Text(
+                            text = "${exercise.muscleGroup} • ScottHermanFitness",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = colors.accent
+                        )
+                    }
+                    UnifiedCloseButton(
+                        onClick = onDismiss,
+                        contentDescription = "Bemutató bezárása"
+                    )
+                }
+
+                // YouTube Video preview card (Screenshot 3 style)
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(170.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable {
+                            val intent = Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(exercise.name + " ScottHermanFitness")}")
+                            )
+                            context.startActivity(intent)
+                        },
+                    shape = RoundedCornerShape(14.dp),
+                    color = androidx.compose.ui.graphics.Color(0xFF0F141C),
+                    border = BorderStroke(1.dp, colors.borderSubtle)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = androidx.compose.ui.graphics.Color(0xFFFF0000),
+                                modifier = Modifier.size(54.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Videó lejátszása",
+                                        tint = androidx.compose.ui.graphics.Color.White,
+                                        modifier = Modifier.size(32.dp)
+                                    )
+                                }
+                            }
+                            Text(
+                                text = "ScottHermanFitness • Technika és bemutató",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = androidx.compose.ui.graphics.Color.White,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                // Instructions and coaching cues
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "Végrehajtási fókuszpontok:",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = colors.textPrimary
+                    )
+                    Text(
+                        text = "1. Kiinduló helyzet: Állíts be stabil tartást, a törzsed maradjon feszes.\n" +
+                            "2. Excentrikus szakasz: Engedd le a súlyt kontrolláltan 2–3 másodperc alatt.\n" +
+                            "3. Koncentrikus szakasz: Dinamikusan, a célizmok maximális feszítésével emeld fel.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = colors.textSecondary,
+                        lineHeight = 18.sp
+                    )
+                }
+
+                // Action button: Megnyitás külső alkalmazásban
+                Button(
+                    onClick = {
+                        val intent = Intent(
+                            Intent.ACTION_VIEW,
+                            Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(exercise.name + " ScottHermanFitness")}")
+                        )
+                        context.startActivity(intent)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = colors.accent,
+                        contentColor = tokens.onAccent
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("exercise_demo_open_external_button")
+                ) {
+                    Text("Megnyitás külső alkalmazásban", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
 }

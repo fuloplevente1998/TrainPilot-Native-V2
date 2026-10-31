@@ -56,6 +56,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import com.repforge.app.nativev2.data.health.HealthConnectSdkStatus
+import com.repforge.app.nativev2.data.health.HealthConnectSyncService
+import com.repforge.app.nativev2.data.health.HealthSyncResult
+import com.repforge.app.nativev2.data.health.HeartRateRecordModel
+import com.repforge.app.nativev2.data.health.HeartRateSampleModel
+import com.repforge.app.nativev2.data.health.StepsRecordModel
+import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.YearMonth
@@ -117,6 +124,7 @@ data class TrainPilotUiState(
     val selectedHealthProvider: HealthProviderSource = HealthProviderSource.HEALTH_CONNECT,
     val healthMetrics: List<HealthDailyMetricEntity> = emptyList(),
     val healthEngineStatus: HealthConnectEngineStatus = HealthConnectEngineStatus(),
+    val healthConnectSdkStatus: HealthConnectSdkStatus = HealthConnectSdkStatus.AVAILABLE,
     val weightEntries: List<WeightEntryEntity> = emptyList(),
     val coachReadiness: CoachReadinessResult? = null,
     val hasLocationPermission: Boolean = false,
@@ -130,12 +138,14 @@ data class TrainPilotUiState(
 
 class TrainPilotViewModel @JvmOverloads constructor(
     application: Application,
-    private val customDao: TrainPilotDao? = null
+    private val customDao: TrainPilotDao? = null,
+    private val customHealthConnectService: HealthConnectSyncService? = null
 ) : AndroidViewModel(application) {
 
     private val dao: TrainPilotDao = customDao ?: TrainPilotDatabase.getInstance(application).dao()
     private val gson = Gson()
     val healthEngine = HealthConnectAndSensorEngine(application)
+    val healthConnectService = customHealthConnectService ?: HealthConnectSyncService(application)
 
     private val _uiState = MutableStateFlow(TrainPilotUiState())
     val uiState: StateFlow<TrainPilotUiState> = _uiState.asStateFlow()
@@ -1567,12 +1577,95 @@ class TrainPilotViewModel @JvmOverloads constructor(
 
     fun syncHealthData() {
         viewModelScope.launch {
+            val sdkStatus = healthConnectService.checkAvailability()
+            _uiState.update { it.copy(healthConnectSdkStatus = sdkStatus) }
+
+            var healthConnectImportedCount = 0
+            if (sdkStatus == HealthConnectSdkStatus.AVAILABLE) {
+                when (val result = healthConnectService.syncTodayMetrics()) {
+                    is HealthSyncResult.Success -> {
+                        if (result.data.isNotEmpty()) {
+                            dao.upsertHealthMetrics(result.data)
+                            healthConnectImportedCount = result.data.size
+                        }
+                    }
+                    is HealthSyncResult.MissingPermissions -> {
+                        _uiState.update {
+                            it.copy(
+                                statusBannerMessage = "Health Connect engedélyek hiányoznak (${result.missing.size} engedély szükséges)."
+                            )
+                        }
+                    }
+                    is HealthSyncResult.Failure -> {
+                        _uiState.update {
+                            it.copy(
+                                statusBannerMessage = "Health Connect szinkronizálási hiba: ${result.error.localizedMessage ?: "Ismeretlen hiba"}"
+                            )
+                        }
+                    }
+                    else -> Unit
+                }
+            }
+
+            // Kiegészítés a helyi hardveres és érzékelő adatokkal (Samsung Health & Szenzorok)
             val entries = healthEngine.performHealthSync()
             dao.upsertHealthMetrics(entries)
+
             _uiState.update {
-                it.copy(
-                    statusBannerMessage = "Health Connect & Samsung Health szinkronizálva: ${entries.size} biometria frissült."
-                )
+                val banner = if (healthConnectImportedCount > 0) {
+                    "Health Connect & Érzékelők szinkronizálva ($healthConnectImportedCount valós Health Connect rekord, ${entries.size} biometria frissült)."
+                } else {
+                    "Egészség és érzékelő adatok szinkronizálva (${entries.size} biometria frissült)."
+                }
+                it.copy(statusBannerMessage = banner)
+            }
+        }
+    }
+
+    /**
+     * Pulzusminta írása közvetlenül a Health Connect tárba.
+     */
+    fun writeHeartRateToHealthConnect(
+        bpm: Long,
+        startTime: Instant = Instant.now().minusSeconds(60),
+        endTime: Instant = Instant.now()
+    ) {
+        viewModelScope.launch {
+            val result = healthConnectService.writeHeartRateSamples(
+                startTime = startTime,
+                endTime = endTime,
+                samples = listOf(HeartRateSampleModel(time = startTime, beatsPerMinute = bpm))
+            )
+            if (result.isSuccess) {
+                _uiState.update { it.copy(statusBannerMessage = "Pulzus ($bpm bpm) sikeresen rögzítve a Health Connectbe.") }
+                syncHealthData()
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Ismeretlen hiba"
+                _uiState.update { it.copy(statusBannerMessage = "Health Connect pulzus írás sikertelen: $err") }
+            }
+        }
+    }
+
+    /**
+     * Lépésszám rekord írása közvetlenül a Health Connect tárba.
+     */
+    fun writeStepsToHealthConnect(
+        count: Long,
+        startTime: Instant = Instant.now().minusSeconds(3600),
+        endTime: Instant = Instant.now()
+    ) {
+        viewModelScope.launch {
+            val result = healthConnectService.writeSteps(
+                startTime = startTime,
+                endTime = endTime,
+                count = count
+            )
+            if (result.isSuccess) {
+                _uiState.update { it.copy(statusBannerMessage = "Lépésszám ($count lépés) sikeresen rögzítve a Health Connectbe.") }
+                syncHealthData()
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "Ismeretlen hiba"
+                _uiState.update { it.copy(statusBannerMessage = "Health Connect lépésszám írás sikertelen: $err") }
             }
         }
     }

@@ -11,7 +11,7 @@ android {
 
     defaultConfig {
         applicationId = "com.repforge.app.nativev2.debug"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 2001
         versionName = "2.0.0-v2"
@@ -85,6 +85,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.gson)
     implementation(libs.play.services.location)
+    implementation(libs.androidx.health.connect)
 
     testImplementation(libs.junit)
     testImplementation(libs.androidx.junit)

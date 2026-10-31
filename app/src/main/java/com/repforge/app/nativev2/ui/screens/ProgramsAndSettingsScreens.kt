@@ -43,6 +43,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.ui.graphics.Color
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -71,9 +72,11 @@ import com.repforge.app.nativev2.ui.TrainPilotUiState
 import com.repforge.app.nativev2.ui.TrainPilotViewModel
 import com.repforge.app.nativev2.ui.components.HeroSurfaceCard
 import com.repforge.app.nativev2.ui.components.TactileSurfaceCard
+import com.repforge.app.nativev2.ui.components.TrainPilotModalSheet
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotColors
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotTokens
 import com.repforge.app.nativev2.ui.theme.NativeThemeTokens
+import com.repforge.app.nativev2.ui.theme.ThemeCategory
 import com.repforge.app.nativev2.ui.theme.TrainPilotTelemetryTypography
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -508,91 +511,99 @@ private fun ProgramEditorModalDialog(
     var selectedExIds by remember {
         mutableStateOf(allExercises.take(3).map { it.id })
     }
+    val colors = LocalTrainPilotColors.current
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Programsablon szerkesztő (V24)", fontWeight = FontWeight.Bold) },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.testTag("program_editor_modal_v24")
+    TrainPilotModalSheet(
+        title = "Programsablon szerkesztő (V24)",
+        onDismiss = onDismiss,
+        closeButtonTag = "program_editor_close_button",
+        footer = {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Program neve") },
-                    singleLine = true,
+                OutlinedButton(
+                    onClick = onDismiss,
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("program_editor_title_input")
-                )
-                OutlinedTextField(
-                    value = subtitle,
-                    onValueChange = { subtitle = it },
-                    label = { Text("Rövid leírás / fókusz") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    listOf("NORMAL", "HIT").forEach { st ->
-                        FilterChip(
-                            selected = style == st,
-                            onClick = { style = st },
-                            label = { Text(st) }
-                        )
-                    }
-                    listOf("RIR_COACH", "DOUBLE", "LINEAR").forEach { pr ->
-                        FilterChip(
-                            selected = progression == pr,
-                            onClick = { progression = pr },
-                            label = { Text(pr) }
-                        )
-                    }
+                        .weight(1f)
+                        .defaultMinSize(minHeight = 48.dp)
+                ) {
+                    Text("Mégse")
                 }
-                OutlinedTextField(
-                    value = dayTitle,
-                    onValueChange = { dayTitle = it },
-                    label = { Text("Edzésnap címe") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Text("Gyakorlatok kiválasztása (${selectedExIds.size} db):", fontWeight = FontWeight.Bold)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    allExercises.take(10).forEach { ex ->
-                        val isSel = ex.id in selectedExIds
-                        FilterChip(
-                            selected = isSel,
-                            onClick = {
-                                selectedExIds = if (isSel && selectedExIds.size > 1)
-                                    selectedExIds - ex.id
-                                else
-                                    (selectedExIds + ex.id).distinct()
-                            },
-                            label = { Text(ex.name) }
-                        )
-                    }
+                Button(
+                    onClick = { onSave(title, subtitle, style, progression, incrementKg, dayTitle, selectedExIds) },
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.accent, contentColor = Color.Black),
+                    modifier = Modifier
+                        .weight(1.2f)
+                        .defaultMinSize(minHeight = 48.dp)
+                        .testTag("program_editor_save_button")
+                ) {
+                    Text("Mentés", fontWeight = FontWeight.Bold)
                 }
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onSave(title, subtitle, style, progression, incrementKg, dayTitle, selectedExIds) },
-                modifier = Modifier
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("program_editor_save_button")
-            ) {
-                Text("Mentés")
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onDismiss,
-                modifier = Modifier.defaultMinSize(minHeight = 48.dp)
-            ) {
-                Text("Mégse")
             }
         }
-    )
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.testTag("program_editor_modal_v24")
+        ) {
+            OutlinedTextField(
+                value = title,
+                onValueChange = { title = it },
+                label = { Text("Program neve") },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("program_editor_title_input")
+            )
+            OutlinedTextField(
+                value = subtitle,
+                onValueChange = { subtitle = it },
+                label = { Text("Rövid leírás / fókusz") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("NORMAL", "HIT").forEach { st ->
+                    FilterChip(
+                        selected = style == st,
+                        onClick = { style = st },
+                        label = { Text(st) }
+                    )
+                }
+                listOf("RIR_COACH", "DOUBLE", "LINEAR").forEach { pr ->
+                    FilterChip(
+                        selected = progression == pr,
+                        onClick = { progression = pr },
+                        label = { Text(pr) }
+                    )
+                }
+            }
+            OutlinedTextField(
+                value = dayTitle,
+                onValueChange = { dayTitle = it },
+                label = { Text("Edzésnap címe") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text("Gyakorlatok kiválasztása (${selectedExIds.size} db):", fontWeight = FontWeight.Bold, color = colors.textPrimary)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                allExercises.take(10).forEach { ex ->
+                    val isSel = ex.id in selectedExIds
+                    FilterChip(
+                        selected = isSel,
+                        onClick = {
+                            selectedExIds = if (isSel && selectedExIds.size > 1)
+                                selectedExIds - ex.id
+                            else
+                                (selectedExIds + ex.id).distinct()
+                        },
+                        label = { Text(ex.name) }
+                    )
+                }
+            }
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -666,53 +677,102 @@ fun SettingsScreen(
             }
         }
 
-        // E16: 32 Theme Palettes Selector
+        // E16: Categorized Theme Palettes Selector (Világos, Sötét, Kontrasztos, Matt, Fényes / Glow)
         item {
             TactileSurfaceCard(
                 modifier = Modifier.testTag("settings_theme_palettes_card")
             ) {
-                Text(
-                    text = "Téma paletta (${NativeThemeTokens.AVAILABLE_THEMES.size} natív téma • Aktív: ${uiState.themeKey}):",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    NativeThemeTokens.AVAILABLE_THEMES.forEach { palette ->
-                        val selected = palette.key == uiState.themeKey
-                        Row(
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = 48.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(if (selected) colors.accent else colors.surfaceSecondary)
-                                .border(
-                                    width = if (selected) 1.5.dp else 1.dp,
-                                    color = if (selected) colors.accent else colors.borderSubtle,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                .clickable { viewModel.setTheme(palette.key) }
-                                .padding(horizontal = 12.dp, vertical = 8.dp)
-                                .testTag("theme_chip_${palette.key}"),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            Box(
+                var selectedThemeCategory by remember { mutableStateOf(ThemeCategory.ALL) }
+
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = "Témák és Megjelenés (${NativeThemeTokens.AVAILABLE_THEMES.size} téma • Aktív: ${uiState.themeKey}):",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = colors.textPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Category Tabs (Világos, Sötét, Kontrasztos, Matt, Fényes / Glow)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        ThemeCategory.entries.forEach { cat ->
+                            FilterChip(
+                                selected = selectedThemeCategory == cat,
+                                onClick = { selectedThemeCategory = cat },
+                                label = { Text(cat.labelHu) },
                                 modifier = Modifier
-                                    .size(16.dp)
-                                    .clip(CircleShape)
-                                    .background(palette.accent)
-                                    .border(1.dp, palette.accent2, CircleShape)
+                                    .defaultMinSize(minHeight = 40.dp)
+                                    .testTag("theme_category_chip_${cat.id}")
                             )
-                            Text(
-                                text = palette.displayName,
-                                color = if (selected) tokens.onAccent else colors.textPrimary,
-                                style = MaterialTheme.typography.labelLarge
-                            )
+                        }
+                    }
+
+                    val filteredThemes = if (selectedThemeCategory == ThemeCategory.ALL) {
+                        NativeThemeTokens.AVAILABLE_THEMES
+                    } else {
+                        NativeThemeTokens.AVAILABLE_THEMES.filter { it.category == selectedThemeCategory }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        filteredThemes.forEach { palette ->
+                            val selected = palette.key == uiState.themeKey
+                            val badgeText = when {
+                                palette.isNeonGlow -> "GLOW"
+                                palette.isHighContrast -> "KONTRAST"
+                                palette.isMatte -> "MATT"
+                                palette.isLight -> "VILÁGOS"
+                                else -> "SÖTÉT"
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .defaultMinSize(minHeight = 48.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(if (selected) colors.accent else colors.surfaceSecondary)
+                                    .border(
+                                        width = if (selected) 2.dp else 1.dp,
+                                        color = when {
+                                            selected -> if (palette.isNeonGlow) palette.glowColor else colors.accent
+                                            palette.isNeonGlow -> palette.glowColor.copy(alpha = 0.5f)
+                                            palette.isHighContrast -> Color(0xFF666666)
+                                            else -> colors.borderSubtle
+                                        },
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { viewModel.setTheme(palette.key) }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                                    .testTag("theme_chip_${palette.key}"),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(16.dp)
+                                        .clip(CircleShape)
+                                        .background(palette.accent)
+                                        .border(1.dp, palette.accent2, CircleShape)
+                                )
+                                Column {
+                                    Text(
+                                        text = palette.displayName,
+                                        color = if (selected) tokens.onAccent else colors.textPrimary,
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Text(
+                                        text = badgeText,
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = if (selected) tokens.onAccent.copy(alpha = 0.8f) else colors.accent
+                                    )
+                                }
+                            }
                         }
                     }
                 }
