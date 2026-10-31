@@ -137,6 +137,8 @@ data class TrainingProfile(
     val sessionMinutes: Int = 60,
     val preferredSplit: String = "Otthoni A/B – Alap",
     val weeklyTargetWorkouts: Int = 15,
+    val weeklyTargetActiveMinutes: Int = 180,
+    val weeklyTargetSteps: Int = 70000,
     val avoidedAreas: List<String> = emptyList(),
     val excludedExerciseIds: List<String> = emptyList(),
     val limitations: String = ""

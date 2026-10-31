@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.DirectionsRun
 import androidx.compose.material.icons.filled.FitnessCenter
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
@@ -101,6 +102,7 @@ fun HomeScreen(
 
     var showProfileModal by remember { mutableStateOf(false) }
     var showTargetGoalModal by remember { mutableStateOf(false) }
+    var isWatchExpanded by remember { mutableStateOf(false) }
 
     val todayMetrics = remember(uiState.healthMetrics, uiState.selectedHealthDateIso) {
         uiState.healthMetrics
@@ -178,26 +180,58 @@ fun HomeScreen(
                 if (active != null) {
                     val doneSets = active.exercises.sumOf { ex -> ex.sets.count { it.isCompleted } }
                     val totalSets = active.exercises.sumOf { it.sets.size }
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(
-                            text = strings.activeWorkoutBanner.uppercase(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = tokens.success
-                        )
-                        Text(
-                            text = active.title,
-                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.ExtraBold),
-                            color = tokens.text
-                        )
-                        Text(
-                            text = "$doneSets / $totalSets sorozat kész • Tulajdonos: ${active.timerOwner.name} (epoch ${active.ownerEpoch})",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = tokens.muted
-                        )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(tokens.success)
+                            )
+                            Column {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = strings.activeWorkoutBanner.uppercase(),
+                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                        color = tokens.success
+                                    )
+                                    Text(
+                                        text = "• ${active.timerOwner.name}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = tokens.muted
+                                    )
+                                }
+                                Text(
+                                    text = active.title,
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = tokens.text,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = "$doneSets / $totalSets sorozat kész",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = tokens.muted
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(8.dp))
                         TrainPilotGoldButton(
                             text = strings.resumeWorkoutCta,
                             onClick = { viewModel.selectMainTab(TopMainTab.TRAINING) },
-                            testTag = "home_hero_resume_workout_button"
+                            testTag = "home_hero_resume_workout_button",
+                            modifier = Modifier.defaultMinSize(minWidth = 90.dp, minHeight = 36.dp)
                         )
                     }
                 } else {
@@ -309,20 +343,23 @@ fun HomeScreen(
             }
         }
 
-        // Mockup 1 Screen 1: Galaxy Watch7 kapcsolati kártya
+        // Mockup 1 Screen 1: Galaxy Watch7 kapcsolati kártya (Lenyitható átadási & szinkron részletekkel)
         item {
-            Box(
+            val activeOwner = uiState.activeWorkout?.timerOwner?.name ?: "PHONE"
+            val liveHr = uiState.activeWorkout?.liveHeartRateBpm
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
                     .background(tokens.card)
                     .border(1.dp, tokens.line, RoundedCornerShape(16.dp))
-                    .clickable { viewModel.selectMinorDestination(TopMinorDestination.SETTINGS) }
                     .padding(14.dp)
                     .testTag("home_watch_status_card")
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { isWatchExpanded = !isWatchExpanded },
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -331,14 +368,73 @@ fun HomeScreen(
                         Spacer(Modifier.width(10.dp))
                         Column {
                             Text("Galaxy Watch7", style = MaterialTheme.typography.titleMedium, color = tokens.text, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text("Csatlakoztatva • 92%", style = MaterialTheme.typography.bodySmall, color = tokens.muted)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.testTag("home_wear_device_label")
+                            ) {
+                                Text("Csatlakoztatva • Vezérlő: $activeOwner", style = MaterialTheme.typography.bodySmall, color = tokens.muted)
                                 Spacer(Modifier.width(6.dp))
                                 Box(Modifier.size(6.dp).clip(CircleShape).background(Color(0xFF2EA043)))
                             }
                         }
                     }
-                    Icon(Icons.Default.KeyboardArrowRight, contentDescription = null, tint = tokens.muted)
+                    Icon(
+                        imageVector = if (isWatchExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = tokens.muted
+                    )
+                }
+
+                AnimatedVisibility(visible = isWatchExpanded) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(tokens.line)
+                        )
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            MetricBadgeBox(
+                                label = "Óra töltöttség",
+                                value = "92%",
+                                testTag = "home_wear_battery_value",
+                                modifier = Modifier.weight(1f)
+                            )
+                            MetricBadgeBox(
+                                label = "Élő pulzus (BPM)",
+                                value = liveHr?.let { "$it bpm" } ?: strings.unknownValue,
+                                testTag = "home_wear_hr_value",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Edzés átadása órára",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = tokens.text
+                            )
+                            OutlinedButton(
+                                onClick = { viewModel.selectMinorDestination(TopMinorDestination.SETTINGS) },
+                                modifier = Modifier.defaultMinSize(minHeight = 36.dp)
+                            ) {
+                                Text("Átadás / Szinkron", fontSize = 12.sp)
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -523,93 +619,8 @@ fun HomeScreen(
             }
         }
 
-        // Wear OS Status Card (E06 / PK4: Never hardcode 92% or Galaxy Watch7; show — when unknown)
-        item {
-            val activeOwner = uiState.activeWorkout?.timerOwner?.name ?: "PHONE"
-            val liveHr = uiState.activeWorkout?.liveHeartRateBpm
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(tokens.card)
-                    .border(1.dp, tokens.line, RoundedCornerShape(16.dp))
-                    .padding(12.dp)
-                    .testTag("home_wear_status_card"),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.Watch, contentDescription = null, tint = tokens.accentText)
-                    Column {
-                        Text(
-                            text = strings.watchStatusTitle,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = tokens.text
-                        )
-                        Text(
-                            text = "Vezérlő: $activeOwner • Óra modell: ${strings.unknownValue}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = tokens.muted,
-                            modifier = Modifier.testTag("home_wear_device_label")
-                        )
-                    }
-                }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    MetricBadgeBox(
-                        label = "Óra töltöttség",
-                        value = strings.unknownValue,
-                        testTag = "home_wear_battery_value",
-                        modifier = Modifier.weight(1f)
-                    )
-                    MetricBadgeBox(
-                        label = "Élő pulzus (BPM)",
-                        value = liveHr?.let { "$it bpm" } ?: strings.unknownValue,
-                        testTag = "home_wear_hr_value",
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-            }
-        }
 
-        // Quick Links to Secondary & Minor Views
-        item {
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = { viewModel.openSubDestination(SubDestination.PROGRESS) },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("home_open_progress_button")
-                ) {
-                    Text(strings.navProgress)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.openSubDestination(SubDestination.EXERCISE_LIBRARY) },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("home_open_exercise_library_button")
-                ) {
-                    Text(strings.navExerciseLibrary)
-                }
-                OutlinedButton(
-                    onClick = { viewModel.selectMinorDestination(TopMinorDestination.CALENDAR) },
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("home_open_calendar_button")
-                ) {
-                    Text(strings.navCalendar)
-                }
-            }
-        }
     }
 
     // Custom App-Styled Profile & Plan Generator Modal (Screenshots 1, 11, 14)

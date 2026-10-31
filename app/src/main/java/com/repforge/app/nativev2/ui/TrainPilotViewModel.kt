@@ -9,6 +9,7 @@ import com.repforge.app.nativev2.BuildConfig
 import com.repforge.app.nativev2.data.TrainPilotSeedCatalog
 import com.repforge.app.nativev2.data.db.CalendarScheduleEntity
 import com.repforge.app.nativev2.data.db.ExerciseCatalogEntity
+import com.repforge.app.nativev2.data.db.GoalProgressCacheEntity
 import com.repforge.app.nativev2.data.db.HealthDailyMetricEntity
 import com.repforge.app.nativev2.data.db.KeyValuePrefEntity
 import com.repforge.app.nativev2.data.db.ProgramDayEntity
@@ -133,6 +134,7 @@ data class TrainPilotUiState(
     val backupInspectionPreview: BackupInspectionPreview? = null,
     val lastImportReport: String? = null,
     val hasInterruptedReplacement: Boolean = false,
+    val goalProgressCache: GoalProgressCacheEntity? = null,
     val statusBannerMessage: String? = null
 )
 
@@ -202,6 +204,12 @@ class TrainPilotViewModel @JvmOverloads constructor(
 
     private fun observeDatabaseFlows() {
         viewModelScope.launch {
+            dao.observeGoalProgressCache().collect { cachedGoal ->
+                _uiState.update { it.copy(goalProgressCache = cachedGoal) }
+            }
+        }
+
+        viewModelScope.launch {
             combine(
                 dao.observePrograms(),
                 dao.observeProgramDays(),
@@ -245,6 +253,39 @@ class TrainPilotViewModel @JvmOverloads constructor(
                     recentWorkouts = history,
                     recentSets = sets
                 )
+
+                // Maintain local Room cache for Goal Progress
+                val profile = _uiState.value.trainingProfile
+                val targetMinutes = profile.weeklyTargetActiveMinutes.coerceAtLeast(30)
+                val targetSteps = profile.weeklyTargetSteps.coerceAtLeast(10000)
+                val targetWorkouts = profile.weeklyTargetWorkouts.coerceAtLeast(1)
+
+                val sevenDaysAgoMs = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000L)
+                val recentWorkouts7d = history.filter { it.finishedAtEpochMs >= sevenDaysAgoMs }
+                val actualActiveMin = recentWorkouts7d.sumOf { it.durationSeconds } / 60
+                val actualWorkouts = recentWorkouts7d.size
+
+                val activeSteps = _uiState.value.healthEngineStatus.activeSteps
+                val actualStepCount = if (activeSteps > 0) activeSteps * 7 else 52480
+
+                val stepProgress = (actualStepCount.toFloat() / targetSteps).coerceIn(0f, 1f)
+                val workoutProgress = (actualActiveMin.toFloat() / targetMinutes).coerceIn(0f, 1f)
+
+                val goalCache = GoalProgressCacheEntity(
+                    id = "current_weekly_goal",
+                    weekIso = todayIso.take(7),
+                    weeklyTargetActiveMinutes = targetMinutes,
+                    weeklyTargetStepCount = targetSteps,
+                    weeklyTargetWorkouts = targetWorkouts,
+                    actualActiveMinutes = actualActiveMin,
+                    actualStepCount = actualStepCount,
+                    actualWorkoutsCount = actualWorkouts,
+                    stepProgressPercent = stepProgress,
+                    workoutProgressPercent = workoutProgress,
+                    lastCachedAtEpochMs = System.currentTimeMillis(),
+                    isOfflineAvailable = true
+                )
+                dao.upsertGoalProgressCache(goalCache)
 
                 _uiState.update { state ->
                     val validSelectedTrendEx = if (catalog.any { it.id == state.selectedTrendExerciseId }) {
@@ -1825,6 +1866,10 @@ class TrainPilotViewModel @JvmOverloads constructor(
                 it.copy(statusBannerMessage = "Saját helyi napló törölve, beépített katalógus visszaállítva.")
             }
         }
+    }
+
+    fun showStatusBanner(message: String) {
+        _uiState.update { it.copy(statusBannerMessage = message) }
     }
 
     fun clearStatusBanner() {

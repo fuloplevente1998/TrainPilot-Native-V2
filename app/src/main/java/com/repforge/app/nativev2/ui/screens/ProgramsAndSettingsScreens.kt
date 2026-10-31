@@ -1,8 +1,10 @@
 package com.repforge.app.nativev2.ui.screens
 
+import com.repforge.app.nativev2.util.rememberHapticTrigger
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,6 +18,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -25,16 +28,23 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -60,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.repforge.app.nativev2.data.db.ExerciseCatalogEntity
@@ -101,19 +112,7 @@ fun ProgramsScreen(
             .testTag("screen_programs_v03"),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item {
-            Text(
-                text = "Edzésprogramok és Sablonépítő (V03 • V24)",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.textPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Válassz a gyári programok közül, generálj személyes Otthoni A/B tervet előnézettel, vagy építs saját programot.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = colors.textSecondary
-            )
-        }
+
 
         // Top Actions: Personal Home A/B Preview (A09), New Custom Program (V24), Exercise Library (V05)
         item {
@@ -616,8 +615,13 @@ fun SettingsScreen(
     val tokens = LocalTrainPilotTokens.current
     val colors = LocalTrainPilotColors.current
     val context = LocalContext.current
+    val haptic = rememberHapticTrigger(uiState.hapticOnSetRecord)
     var backupJsonInput by remember { mutableStateOf("") }
     var showEraseDialog by remember { mutableStateOf(false) }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    var expandedSection by remember { mutableStateOf("") }
 
     var globalWorkSec by remember(uiState.globalIntervalDefaults) {
         mutableStateOf(uiState.globalIntervalDefaults.workSeconds.toString())
@@ -635,142 +639,346 @@ fun SettingsScreen(
             .background(colors.backgroundPrimary)
             .padding(horizontal = 16.dp, vertical = 10.dp)
             .testTag("screen_settings_v19"),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Section Title Header
         item {
-            Text(
-                text = "Beállítások, Témák, Engedélyek és Adatátvitel (V19 • V21 • V22)",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.textPrimary,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "Külön telepíthető V2 csomag: com.repforge.app.nativev2.debug (meglévő 1.3.71 appot nem ír felül)",
-                style = MaterialTheme.typography.bodySmall,
-                color = colors.semanticSuccess
-            )
-        }
-
-        // E16: 4-Language Selector (HU, EN, DE, RO)
-        item {
-            TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_language_card")
-            ) {
+            Column(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
                 Text(
-                    text = "Nyelv (4 nyelvű felület • E16):",
-                    style = MaterialTheme.typography.titleMedium,
+                    text = "Beállítások",
+                    style = MaterialTheme.typography.headlineSmall,
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    AppLanguage.entries.forEach { lang ->
-                        FilterChip(
-                            selected = uiState.language == lang,
-                            onClick = { viewModel.setLanguage(lang) },
-                            label = { Text("${lang.code.uppercase()} • ${lang.displayName}") },
-                            modifier = Modifier
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("settings_lang_chip_${lang.code}")
+                Text(
+                    text = "Kattints a kategóriákra a részletes beállítások megnyitásához",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+            }
+        }
+
+        // 1. Nyelv Beállítása (Leugró ablak)
+        item {
+            TactileSurfaceCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptic()
+                        showLanguageDialog = true
+                    }
+                    .testTag("settings_language_card")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = colors.accentSoft,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Nyelv Beállítása",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "${uiState.language.displayName} (${uiState.language.code.uppercase()})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = colors.textSecondary
+                    )
+                }
+            }
+        }
+
+        // 2. Témák és Megjelenés (Leugró ablak kategória oszlopokkal)
+        item {
+            TactileSurfaceCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        haptic()
+                        showThemeDialog = true
+                    }
+                    .testTag("settings_theme_card")
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = colors.accentSoft,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Palette,
+                                    contentDescription = null,
+                                    tint = colors.accent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Témák és Megjelenés",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "${uiState.themeKey.replaceFirstChar { it.uppercase() }} (Oszlopos kategóriák)",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = null,
+                        tint = colors.textSecondary
+                    )
+                }
+            }
+        }
+
+        // 2. Időzítő és Intervallum (Mini-Page Expander)
+        item {
+            val isExpanded = expandedSection == "timer"
+            TactileSurfaceCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings_timer_defaults_card")
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedSection = if (isExpanded) "" else "timer" },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = colors.accentSoft,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = null,
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Időzítő és Intervallumok",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = colors.textPrimary
+                                )
+                                Text(
+                                    text = "Munka: ${uiState.globalIntervalDefaults.workSeconds}mp • Pihenő: ${uiState.globalIntervalDefaults.restSeconds}mp",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = colors.textSecondary
                         )
+                    }
+
+                    AnimatedVisibility(visible = isExpanded) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedTextField(
+                                    value = globalWorkSec,
+                                    onValueChange = { globalWorkSec = it },
+                                    label = { Text("Munka (mp)") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = globalRestSec,
+                                    onValueChange = { globalRestSec = it },
+                                    label = { Text("Pihenő (mp)") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = globalRounds,
+                                    onValueChange = { globalRounds = it },
+                                    label = { Text("Körök") },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Haptikus visszajelzés (rezgés)", color = colors.textPrimary, fontWeight = FontWeight.Medium)
+                                Switch(
+                                    checked = uiState.hapticOnSetRecord,
+                                    onCheckedChange = { viewModel.toggleHapticOnSet(it) },
+                                    modifier = Modifier.testTag("settings_haptic_switch")
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    viewModel.saveGlobalIntervalDefaults(
+                                        IntervalPresetConfig(
+                                            workSeconds = globalWorkSec.toIntOrNull()?.coerceIn(5, 3600) ?: 45,
+                                            restSeconds = globalRestSec.toIntOrNull()?.coerceIn(5, 3600) ?: 90,
+                                            rounds = globalRounds.toIntOrNull()?.coerceIn(1, 50) ?: 4,
+                                            soundEnabled = uiState.globalIntervalDefaults.soundEnabled,
+                                            vibrationEnabled = uiState.hapticOnSetRecord,
+                                            autoAdvance = uiState.globalIntervalDefaults.autoAdvance
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
+                            ) {
+                                Text("Időzítő alapértelmezés mentése")
+                            }
+                        }
                     }
                 }
             }
         }
 
-        // E16: Categorized Theme Palettes Selector (Világos, Sötét, Kontrasztos, Matt, Fényes / Glow)
+        // 3. Adatmentés és JSON Adatátvitel (Mini-Page Expander)
         item {
+            val isExpanded = expandedSection == "backup"
             TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_theme_palettes_card")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings_backup_migration_card_v21")
             ) {
-                var selectedThemeCategory by remember { mutableStateOf(ThemeCategory.ALL) }
-
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Témák és Megjelenés (${NativeThemeTokens.AVAILABLE_THEMES.size} téma • Aktív: ${uiState.themeKey}):",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = colors.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Category Tabs (Világos, Sötét, Kontrasztos, Matt, Fényes / Glow)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            .clickable { expandedSection = if (isExpanded) "" else "backup" },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        ThemeCategory.entries.forEach { cat ->
-                            FilterChip(
-                                selected = selectedThemeCategory == cat,
-                                onClick = { selectedThemeCategory = cat },
-                                label = { Text(cat.labelHu) },
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = 40.dp)
-                                    .testTag("theme_category_chip_${cat.id}")
-                            )
-                        }
-                    }
-
-                    val filteredThemes = if (selectedThemeCategory == ThemeCategory.ALL) {
-                        NativeThemeTokens.AVAILABLE_THEMES
-                    } else {
-                        NativeThemeTokens.AVAILABLE_THEMES.filter { it.category == selectedThemeCategory }
-                    }
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        filteredThemes.forEach { palette ->
-                            val selected = palette.key == uiState.themeKey
-                            val badgeText = when {
-                                palette.isNeonGlow -> "GLOW"
-                                palette.isHighContrast -> "KONTRAST"
-                                palette.isMatte -> "MATT"
-                                palette.isLight -> "VILÁGOS"
-                                else -> "SÖTÉT"
-                            }
-                            Row(
-                                modifier = Modifier
-                                    .defaultMinSize(minHeight = 48.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (selected) colors.accent else colors.surfaceSecondary)
-                                    .border(
-                                        width = if (selected) 2.dp else 1.dp,
-                                        color = when {
-                                            selected -> if (palette.isNeonGlow) palette.glowColor else colors.accent
-                                            palette.isNeonGlow -> palette.glowColor.copy(alpha = 0.5f)
-                                            palette.isHighContrast -> Color(0xFF666666)
-                                            else -> colors.borderSubtle
-                                        },
-                                        shape = RoundedCornerShape(12.dp)
-                                    )
-                                    .clickable { viewModel.setTheme(palette.key) }
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                                    .testTag("theme_chip_${palette.key}"),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = colors.accentSoft,
+                                modifier = Modifier.size(40.dp)
                             ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(16.dp)
-                                        .clip(CircleShape)
-                                        .background(palette.accent)
-                                        .border(1.dp, palette.accent2, CircleShape)
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = colors.accent,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Biztonsági mentés és Adatátvitel",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = colors.textPrimary
                                 )
-                                Column {
-                                    Text(
-                                        text = palette.displayName,
-                                        color = if (selected) tokens.onAccent else colors.textPrimary,
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Text(
-                                        text = badgeText,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                                        color = if (selected) tokens.onAccent.copy(alpha = 0.8f) else colors.accent
-                                    )
+                                Text(
+                                    text = "JSON export, import és adatszinkron",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = colors.textSecondary
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isExpanded) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+                            OutlinedButton(
+                                onClick = { backupJsonInput = viewModel.generateExportBackupJson() },
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
+                            ) {
+                                Text("Jelenlegi adatok JSON exportja")
+                            }
+                            OutlinedTextField(
+                                value = backupJsonInput,
+                                onValueChange = { backupJsonInput = it },
+                                label = { Text("JSON mentés beillesztése") },
+                                maxLines = 4,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                OutlinedButton(
+                                    onClick = { viewModel.inspectBackupPayloadForImport(backupJsonInput) },
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp)
+                                ) {
+                                    Text("Előnézet & Vizsgálat")
+                                }
+                                Button(
+                                    onClick = { viewModel.confirmAndExecuteAtomicImport() },
+                                    enabled = uiState.backupInspectionPreview?.isValid == true,
+                                    colors = ButtonDefaults.buttonColors(containerColor = colors.semanticSuccess),
+                                    modifier = Modifier.weight(1f).defaultMinSize(minHeight = 48.dp)
+                                ) {
+                                    Text("Importálás")
                                 }
                             }
                         }
@@ -779,292 +987,227 @@ fun SettingsScreen(
             }
         }
 
-        // B08 + E17: Global Timer & Interval Defaults + Haptics (B18)
+        // 4. Veszélyzóna (Mini-Page Expander)
         item {
+            val isExpanded = expandedSection == "danger"
             TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_timer_defaults_card")
-            ) {
-                Text(
-                    text = "Globális időzítő, intervallum és haptika alapértelmezések (E17 • B18)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = globalWorkSec,
-                        onValueChange = { globalWorkSec = it },
-                        label = { Text("Munka (mp)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = globalRestSec,
-                        onValueChange = { globalRestSec = it },
-                        label = { Text("Pihenő (mp)") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                    OutlinedTextField(
-                        value = globalRounds,
-                        onValueChange = { globalRounds = it },
-                        label = { Text("Körök") },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Haptikus visszajelzés (rezgés):", color = colors.textPrimary)
-                    Switch(
-                        checked = uiState.hapticOnSetRecord,
-                        onCheckedChange = { viewModel.toggleHapticOnSet(it) },
-                        modifier = Modifier.testTag("settings_haptic_switch")
-                    )
-                }
-                Button(
-                    onClick = {
-                        viewModel.saveGlobalIntervalDefaults(
-                            IntervalPresetConfig(
-                                workSeconds = globalWorkSec.toIntOrNull()?.coerceIn(5, 3600) ?: 45,
-                                restSeconds = globalRestSec.toIntOrNull()?.coerceIn(5, 3600) ?: 90,
-                                rounds = globalRounds.toIntOrNull()?.coerceIn(1, 50) ?: 4,
-                                soundEnabled = uiState.globalIntervalDefaults.soundEnabled,
-                                vibrationEnabled = uiState.hapticOnSetRecord,
-                                autoAdvance = uiState.globalIntervalDefaults.autoAdvance
-                            )
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("settings_save_global_interval_button")
-                ) {
-                    Text("Globális időzítő alapértelmezés mentése")
-                }
-            }
-        }
-
-        // V22 / E18: Contextual Permissions & System Settings Recovery
-        item {
-            TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_permissions_card_v22")
-            ) {
-                Text(
-                    text = "Kontextuális engedélyek és helyreállítás (V22 • E18)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "GPS engedély: ${if (uiState.hasLocationPermission) "Megadva" else "Nincs megadva"}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary
-                )
-                OutlinedButton(
-                    onClick = {
-                        runCatching {
-                            val intent = Intent(
-                                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                                Uri.fromParts("package", context.packageName, null)
-                            )
-                            context.startActivity(intent)
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("settings_open_system_app_details_button")
-                ) {
-                    Text("Rendszer alkalmazás-engedélyek megnyitása")
-                }
-            }
-        }
-
-        // E03 / E09: Google Drive (appDataFolder) & Google Calendar OAuth Configuration Status
-        item {
-            val cloudConfigured = viewModel.isGoogleCloudConfigured()
-            TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_cloud_status_card")
-            ) {
-                Text(
-                    text = "Google Drive (appDataFolder) és Google Naptár integráció",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = if (cloudConfigured)
-                        "✓ OAuth kliens konfigurálva a BuildConfig-ban."
-                    else
-                        "ℹ OAuth kliens kulcs nincs megadva. Add meg a GOOGLE_WEB_CLIENT_ID értéket az AI Studio Secrets paneljén (soha ne használd a local.properties fájlt). Helyi JSON export/import teljes körűen elérhető alább.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary
-                )
-            }
-        }
-
-        // V21 & docs/04-ADATATVITEL.md: One-Time V1->V2 Personal Backup Inspection, Import & Export
-        item {
-            HeroSurfaceCard(
-                modifier = Modifier.testTag("settings_backup_migration_card_v21")
-            ) {
-                Text(
-                    text = "Egyszeri személyes adatátvitel (1.3.71 → V2) és JSON Mentés (V21)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Nincs csendes háttérszinkron. Minden importálás előzetes ellenőrzéssel (inspection), determinisztikus deduplikációval és visszaolvasási igazolással történik.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = colors.textSecondary
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = {
-                            backupJsonInput = viewModel.generateExportBackupJson()
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("backup_export_json_button")
-                    ) {
-                        Text("Jelenlegi adatok JSON exportja")
-                    }
-                }
-
-                OutlinedTextField(
-                    value = backupJsonInput,
-                    onValueChange = { backupJsonInput = it },
-                    label = { Text("JSON mentés / 1.3.71 export tartalma") },
-                    maxLines = 5,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .testTag("backup_json_input")
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { viewModel.inspectBackupPayloadForImport(backupJsonInput) },
-                        modifier = Modifier
-                            .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("backup_inspect_button")
-                    ) {
-                        Text("1. Mentés vizsgálata (Előnézet)")
-                    }
-
-                    Button(
-                        onClick = { viewModel.confirmAndExecuteAtomicImport() },
-                        enabled = uiState.backupInspectionPreview?.isValid == true,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = colors.semanticSuccess,
-                            contentColor = tokens.onAccent
-                        ),
-                        modifier = Modifier
-                            .weight(1f)
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("backup_execute_import_button")
-                    ) {
-                        Text("2. Importálás végrehajtása", fontWeight = FontWeight.Bold)
-                    }
-                }
-
-                // Inspection Report Box
-                val report = uiState.backupInspectionPreview
-                if (report != null) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(colors.surfaceSecondary)
-                            .padding(10.dp)
-                            .testTag("backup_inspection_report_box"),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = if (report.isValid)
-                                "✓ Érvényes mentés (${report.format} • ${report.dateRangeText})"
-                            else
-                                "✗ Hibás mentés: ${report.dateRangeText}",
-                            fontWeight = FontWeight.Bold,
-                            color = if (report.isValid) colors.semanticSuccess else colors.semanticDanger
-                        )
-                        if (report.isValid) {
-                            Text(
-                                text = "Edzések: ${report.workoutCount} db (Duplikátum kiszűrve: ${report.duplicateWorkoutCount} db) • Sorozatok: ${report.setCount} db • Egészség: ${report.healthRecordCount} db",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = colors.textPrimary
-                            )
-                        }
-                    }
-                }
-
-                if (!uiState.lastImportReport.isNullOrBlank()) {
-                    Text(
-                        text = uiState.lastImportReport,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = colors.semanticSuccess,
-                        modifier = Modifier.testTag("backup_import_summary_text")
-                    )
-                }
-
-                if (uiState.hasInterruptedReplacement) {
-                    OutlinedButton(
-                        onClick = { viewModel.resumeInterruptedReplacement() },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .defaultMinSize(minHeight = 48.dp)
-                            .testTag("backup_recover_snapshot_button")
-                    ) {
-                        Text("Megszakadt csere-import folytatása (E14)")
-                    }
-                }
-            }
-        }
-
-        // E15: Destructive Local Data Reset (Blocked if active workout is running)
-        item {
-            TactileSurfaceCard(
-                modifier = Modifier.testTag("settings_danger_zone_card"),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("settings_danger_zone_card"),
                 highlightedBorderColor = colors.semanticDanger
             ) {
-                Text(
-                    text = "Veszélyzóna: Helyi adatok törlése (E15)",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = colors.semanticDanger,
-                    fontWeight = FontWeight.Bold
-                )
-                OutlinedButton(
-                    onClick = { showEraseDialog = true },
-                    enabled = uiState.activeWorkout == null,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("settings_erase_all_data_button")
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text(
-                        text = if (uiState.activeWorkout != null)
-                            "Aktív edzés közben a törlés zárolva van"
-                        else
-                            "Minden helyi napló és egyéni adat törlése",
-                        color = colors.semanticDanger
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedSection = if (isExpanded) "" else "danger" },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = colors.semanticDanger.copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = null,
+                                        tint = colors.semanticDanger,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                            Column {
+                                Text(
+                                    text = "Veszélyzóna",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = colors.semanticDanger
+                                )
+                                Text(
+                                    text = "Helyi adatok törlése és gyári állapot",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = colors.textSecondary
+                                )
+                            }
+                        }
+                        Icon(
+                            imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = colors.semanticDanger
+                        )
+                    }
+
+                    AnimatedVisibility(visible = isExpanded) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+                            OutlinedButton(
+                                onClick = { showEraseDialog = true },
+                                enabled = uiState.activeWorkout == null,
+                                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp)
+                            ) {
+                                Text(
+                                    text = if (uiState.activeWorkout != null) "Törlés zárolva (aktív edzés van)" else "Minden helyi napló törlése",
+                                    color = colors.semanticDanger
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
+    if (showLanguageDialog) {
+        AlertDialog(
+            onDismissRequest = { showLanguageDialog = false },
+            title = { Text("Nyelv kiválasztása") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    AppLanguage.entries.forEach { lang ->
+                        val selected = uiState.language == lang
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = if (selected) colors.accent else colors.surfaceSecondary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    haptic()
+                                    viewModel.setLanguage(lang)
+                                    showLanguageDialog = false
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "${lang.code.uppercase()} • ${lang.displayName}",
+                                    color = if (selected) tokens.onAccent else colors.textPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (selected) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = tokens.onAccent)
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showLanguageDialog = false }) {
+                    Text("Bezárás")
+                }
+            }
+        )
+    }
+
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            title = { Text("Témák kategória oszlopok szerint") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(380.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        val categoriesToDisplay = listOf(
+                            ThemeCategory.DARK to "Sötét",
+                            ThemeCategory.LIGHT to "Világos",
+                            ThemeCategory.HIGH_CONTRAST to "Kontrasztos",
+                            ThemeCategory.MATTE to "Matt",
+                            ThemeCategory.NEON_GLOW to "Fényes / Glow"
+                        )
+
+                        categoriesToDisplay.forEach { (cat, catTitle) ->
+                            val catThemes = NativeThemeTokens.AVAILABLE_THEMES.filter { it.category == cat }
+                            if (catThemes.isNotEmpty()) {
+                                Column(
+                                    modifier = Modifier
+                                        .width(160.dp)
+                                        .fillMaxHeight()
+                                        .background(colors.surfaceSecondary, RoundedCornerShape(12.dp))
+                                        .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                                        .padding(8.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = catTitle,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = colors.accent,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(colors.borderSubtle))
+
+                                    catThemes.forEach { palette ->
+                                        val selected = palette.key == uiState.themeKey
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(8.dp))
+                                                .background(if (selected) colors.accent else colors.backgroundPrimary)
+                                                .clickable {
+                                                    viewModel.setTheme(palette.key)
+                                                }
+                                                .padding(horizontal = 8.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(12.dp)
+                                                    .clip(CircleShape)
+                                                    .background(palette.accent)
+                                                    .border(1.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+                                            )
+                                            Text(
+                                                text = palette.displayName,
+                                                color = if (selected) tokens.onAccent else colors.textPrimary,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(onClick = { showThemeDialog = false }) {
+                    Text("Kész")
+                }
+            }
+        )
+    }
+
     if (showEraseDialog) {
         AlertDialog(
             onDismissRequest = { showEraseDialog = false },
-            title = { Text("Minden helyi adat törlése (E15)") },
-            text = { Text("Biztosan törlöd az összes helyi edzésnaplót, egészségügyi rekordot és egyéni beállítást? A gyári gyakorlatok és programok újratöltődnek.") },
+            title = { Text("Minden helyi adat törlése") },
+            text = { Text("Biztosan törlöd az összes helyi edzésnaplót és adatot?") },
             confirmButton = {
                 Button(
                     onClick = {
@@ -1072,9 +1215,7 @@ fun SettingsScreen(
                         viewModel.eraseLocalUserDataConfirmed()
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = colors.semanticDanger),
-                    modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
-                        .testTag("confirm_erase_all_data_button")
+                    modifier = Modifier.defaultMinSize(minHeight = 48.dp)
                 ) {
                     Text("Végleges törlés")
                 }

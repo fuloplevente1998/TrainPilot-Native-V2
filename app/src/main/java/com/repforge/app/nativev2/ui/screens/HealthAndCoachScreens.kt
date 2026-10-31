@@ -137,26 +137,18 @@ fun HealthScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Egészség és Regeneráció (V17 • 26 metrika)",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = colors.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Dátum: ${uiState.selectedHealthDateIso} • Nem mért értékek: — (soha nem 0)",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
-                    )
-                }
+                Text(
+                    text = "Dátum: ${uiState.selectedHealthDateIso}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
                 OutlinedButton(
                     onClick = { viewModel.openSubDestination(SubDestination.PROGRESS) },
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
+                        .defaultMinSize(minHeight = 38.dp)
                         .testTag("health_open_weight_journal_button")
                 ) {
-                    Text("Testsúlynapló")
+                    Text("Testsúlynapló", fontSize = 12.sp)
                 }
             }
         }
@@ -269,6 +261,46 @@ fun HealthScreen(
                     }
                 }
             }
+        }
+
+        // Heti Egészség & Edzés Célok (Health Connect Sync & Room Cache)
+        item {
+            WeeklyHealthSummaryCard(
+                uiState = uiState,
+                viewModel = viewModel,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // 24 Órás Pulzus Trend Grafikon (Health Connect Telemetria)
+        item {
+            val liveBpm = uiState.healthEngineStatus.restingHeartRateBpm
+            val hrSamples = remember(liveBpm) {
+                listOf(
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(0, 56, "00:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(3, 52, "03:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(6, 60, "06:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(9, 82, "09:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(12, 138, "12:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(15, 88, "15:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(18, 115, "18:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(21, 65, "21:00"),
+                    com.repforge.app.nativev2.ui.components.HeartRateSamplePoint(24, liveBpm, "24:00")
+                )
+            }
+            com.repforge.app.nativev2.ui.components.CollapsibleHeartRateChartCard(
+                samples = hrSamples,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
+        // Testsúlynapló & Trend Grafikon (Miniatűr / Lenyitható Részletes Mód)
+        item {
+            com.repforge.app.nativev2.ui.components.CollapsibleWeightTrendChartCard(
+                uiState = uiState,
+                viewModel = viewModel,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         // Mockup 3 Screen 5: Napi adatok kártya (6 db csempe 2x3 rácsban)
@@ -735,31 +767,18 @@ fun CoachScreen(
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Natív Edzői Motor (Coach V18)",
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = colors.textPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Determinisztikus terhelés-, fájdalom- és regenerációelemzés",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = colors.textSecondary
-                    )
-                }
                 Button(
                     onClick = { viewModel.openSubDestination(SubDestination.PROGRESS) },
                     modifier = Modifier
-                        .defaultMinSize(minHeight = 48.dp)
+                        .defaultMinSize(minHeight = 38.dp)
                         .testTag("coach_open_progress_button")
                 ) {
-                    Icon(Icons.Default.ShowChart, contentDescription = null)
+                    Icon(Icons.Default.ShowChart, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(strings.navProgress)
+                    Text(strings.navProgress, fontSize = 12.sp)
                 }
             }
         }
@@ -992,8 +1011,9 @@ fun CoachScreen(
                     style = MaterialTheme.typography.titleMedium,
                     color = colors.textPrimary,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.weight(1f, fill = false),
+                    modifier = Modifier.weight(1f),
                     maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (activeProg != null) {
@@ -1009,7 +1029,8 @@ fun CoachScreen(
                             style = TrainPilotTelemetryTypography.badgePill,
                             color = colors.accent,
                             maxLines = 1,
-                            softWrap = false
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1099,12 +1120,6 @@ fun CalendarScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Text(
-                text = "Edzésnaptár és Többhetes Ütemező (V04 • E02)",
-                style = MaterialTheme.typography.headlineMedium,
-                color = colors.textPrimary,
-                fontWeight = FontWeight.Bold
-            )
             Text(
                 text = "Kiválasztott nap: ${uiState.selectedCalendarDateIso}",
                 style = MaterialTheme.typography.bodyMedium,

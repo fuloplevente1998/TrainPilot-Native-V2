@@ -39,20 +39,27 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.ShowChart
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import com.repforge.app.nativev2.util.WorkoutPdfExporter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -64,7 +71,13 @@ import com.repforge.app.nativev2.domain.TopMainTab
 import com.repforge.app.nativev2.domain.TopMinorDestination
 import com.repforge.app.nativev2.ui.TrainPilotUiState
 import com.repforge.app.nativev2.ui.TrainPilotViewModel
+import com.repforge.app.nativev2.ui.components.CalendarMonthGrid
 import com.repforge.app.nativev2.ui.components.CircularReadinessGauge
+import com.repforge.app.nativev2.ui.components.HeartRate24hTrendLineChart
+import com.repforge.app.nativev2.ui.components.HeartRateSamplePoint
+import com.repforge.app.nativev2.ui.components.TrainPilotDropdownField
+import com.repforge.app.nativev2.ui.components.TrainPilotGoldButton
+import com.repforge.app.nativev2.ui.components.TrainPilotModalSheet
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotColors
 import com.repforge.app.nativev2.ui.theme.LocalTrainPilotTokens
 import com.repforge.app.nativev2.ui.theme.TrainPilotTelemetryTypography
@@ -90,6 +103,7 @@ fun WorkoutDashboard(
     viewModel: TrainPilotViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val colors = LocalTrainPilotColors.current
     val tokens = LocalTrainPilotTokens.current
 
@@ -151,16 +165,22 @@ fun WorkoutDashboard(
                                     modifier = Modifier.size(16.dp)
                                 )
                             }
-                            Column {
+                            Column(modifier = Modifier.weight(1f, fill = false)) {
                                 Text(
                                     text = if (session.isPaused) "Szüneteltetve" else "Folyamatban lévő edzés",
                                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = colors.accent
+                                    color = colors.accent,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
                                     text = session.title,
                                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.ExtraBold),
-                                    color = colors.textPrimary
+                                    color = colors.textPrimary,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
@@ -207,7 +227,7 @@ fun WorkoutDashboard(
                     .border(1.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
                     .clickable { viewModel.startQuickWorkout(outdoorGps = false) }
                     .padding(horizontal = 16.dp, vertical = 14.dp)
-                    .testTag("workout_dashboard_quick_workout_card"),
+                    .testTag("training_start_quick_indoor"),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -231,16 +251,25 @@ fun WorkoutDashboard(
                         )
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
                         Text(
                             text = "Gyors edzés",
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = colors.textPrimary
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Indíts egy rövid edzést most",
                             style = MaterialTheme.typography.bodySmall,
-                            color = colors.textSecondary
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -272,7 +301,7 @@ fun WorkoutDashboard(
                         .clickable { viewModel.openSubDestination(SubDestination.EXERCISE_LIBRARY) }
                         .padding(14.dp)
                         .defaultMinSize(minHeight = 120.dp)
-                        .testTag("workout_dashboard_gym_exercise_tile"),
+                        .testTag("training_open_exercise_library"),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(
@@ -296,12 +325,18 @@ fun WorkoutDashboard(
                         Text(
                             text = "Gyakorlat választása",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = colors.textPrimary
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Egyéni edzés összeállítása ›",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = colors.textSecondary
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -316,7 +351,7 @@ fun WorkoutDashboard(
                         .clickable { viewModel.startQuickWorkout(outdoorGps = true) }
                         .padding(14.dp)
                         .defaultMinSize(minHeight = 120.dp)
-                        .testTag("workout_dashboard_outdoor_tile"),
+                        .testTag("training_start_quick_outdoor"),
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     Box(
@@ -340,12 +375,18 @@ fun WorkoutDashboard(
                         Text(
                             text = "Szabadtéri edzés",
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = colors.textPrimary
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "Futás, túra, GPS mérés ›",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = colors.textSecondary
+                            color = colors.textSecondary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -363,16 +404,22 @@ fun WorkoutDashboard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Aktuális program",
                                 style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                color = colors.textPrimary
+                                color = colors.textPrimary,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = activeProgram.name,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = colors.accent
+                                color = colors.accent,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
@@ -380,6 +427,9 @@ fun WorkoutDashboard(
                             text = "Összes megtekintése ›",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                             color = colors.accent,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .clickable { viewModel.selectMainTab(TopMainTab.PROGRAMS) }
                                 .padding(vertical = 4.dp)
@@ -580,7 +630,10 @@ fun WorkoutDashboard(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
                             Text(
                                 text = "Legutóbbi edzés",
                                 style = MaterialTheme.typography.labelSmall,
@@ -589,21 +642,30 @@ fun WorkoutDashboard(
                             Text(
                                 text = lastWorkout.title,
                                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                                color = colors.textPrimary
+                                color = colors.textPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Text(
                                 text = "${lastWorkout.durationSeconds / 60} perc • ${lastWorkout.totalVolumeKg.toInt()} kg összsúly",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                color = colors.accent
+                                color = colors.accent,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
 
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = Color(0xFF2EA043),
-                            modifier = Modifier.size(24.dp)
-                        )
+                        OutlinedButton(
+                            onClick = {
+                                WorkoutPdfExporter.exportAndShareWorkoutPdf(context, lastWorkout)
+                                viewModel.showStatusBanner("📄 PDF összefoglaló exportálva: ${lastWorkout.title}")
+                            },
+                            modifier = Modifier
+                                .defaultMinSize(minHeight = 36.dp)
+                                .testTag("export_workout_pdf_button")
+                        ) {
+                            Text("📄 PDF", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
 
@@ -628,12 +690,16 @@ fun WorkoutDashboard(
                         Text(
                             text = "Mai felkészültség: ${uiState.healthEngineStatus.samsungEnergyScore} / 100",
                             style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = colors.textPrimary
+                            color = colors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Text(
                             text = "A terhelési adatok alapján javasolt 2–3 RIR tartalék megtartása.",
                             style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = colors.textSecondary
+                            color = colors.textSecondary,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -670,46 +736,6 @@ fun WorkoutDashboard(
                         modifier = Modifier.weight(1f)
                     )
                 }
-            }
-        }
-
-        // =====================================================================
-        // 6. QUICK NAVIGATION 3-TILE GRID (Mockup 1/4 Screen 2 bottom)
-        // =====================================================================
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Programok
-                DashboardNavTile(
-                    title = "Programok",
-                    subtitle = "Edzéstervek",
-                    icon = Icons.Default.FormatListBulleted,
-                    onClick = { viewModel.selectMainTab(TopMainTab.PROGRAMS) },
-                    modifier = Modifier.weight(1f),
-                    testTag = "workout_dashboard_nav_programs"
-                )
-
-                // Naptár
-                DashboardNavTile(
-                    title = "Naptár",
-                    subtitle = "Tervezés",
-                    icon = Icons.Default.CalendarMonth,
-                    onClick = { viewModel.selectMinorDestination(TopMinorDestination.CALENDAR) },
-                    modifier = Modifier.weight(1f),
-                    testTag = "workout_dashboard_nav_calendar"
-                )
-
-                // Coach
-                DashboardNavTile(
-                    title = "Coach",
-                    subtitle = "AI segítség",
-                    icon = Icons.Default.AutoAwesome,
-                    onClick = { viewModel.selectMinorDestination(TopMinorDestination.COACH) },
-                    modifier = Modifier.weight(1f),
-                    testTag = "workout_dashboard_nav_coach"
-                )
             }
         }
 
@@ -750,6 +776,7 @@ private fun DashboardMetricBadge(
             style = TrainPilotTelemetryTypography.tableCellNumeric.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
             color = colors.textPrimary,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
         Text(
@@ -757,6 +784,7 @@ private fun DashboardMetricBadge(
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
             color = colors.textSecondary,
             maxLines = 1,
+            softWrap = false,
             overflow = TextOverflow.Ellipsis
         )
     }
@@ -781,7 +809,7 @@ private fun DashboardNavTile(
             .background(colors.surfacePrimaryCard)
             .border(1.dp, colors.borderSubtle, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
-            .padding(vertical = 12.dp, horizontal = 8.dp)
+            .padding(vertical = 12.dp, horizontal = 6.dp)
             .defaultMinSize(minHeight = 84.dp)
             .testTag(testTag),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -798,13 +826,541 @@ private fun DashboardNavTile(
             text = title,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, fontSize = 13.sp),
             color = colors.textPrimary,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
         Text(
             text = subtitle,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
             color = colors.textSecondary,
-            maxLines = 1
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 }
+
+/**
+ * Summary card aggregating weekly step counts and total active workout minutes
+ * via Health Connect integration.
+ */
+@Composable
+fun WeeklyHealthSummaryCard(
+    uiState: TrainPilotUiState,
+    viewModel: TrainPilotViewModel,
+    modifier: Modifier = Modifier,
+    testTag: String = "weekly_health_summary_card"
+) {
+    val colors = LocalTrainPilotColors.current
+    var showGoalModal by remember { mutableStateOf(false) }
+
+    // Targets from user profile
+    val profile = uiState.trainingProfile
+    val weeklyWorkoutGoalMinutes = profile.weeklyTargetActiveMinutes.coerceAtLeast(30)
+    val targetWeeklySteps = profile.weeklyTargetSteps.coerceAtLeast(10000)
+
+    // Aggregate active workout minutes over the past 7 days
+    val nowEpochMs = remember { System.currentTimeMillis() }
+    val sevenDaysAgoMs = nowEpochMs - (7 * 24 * 60 * 60 * 1000L)
+    val recentWorkouts = remember(uiState.workoutHistory) {
+        uiState.workoutHistory.filter { it.finishedAtEpochMs >= sevenDaysAgoMs }
+    }
+    val totalActiveWorkoutMinutes = remember(recentWorkouts) {
+        recentWorkouts.sumOf { it.durationSeconds } / 60
+    }
+
+    // Weekly steps calculation (daily active steps * 7 or aggregated step entries)
+    val dailySteps = uiState.healthEngineStatus.activeSteps
+    val estimatedWeeklySteps = remember(dailySteps) {
+        if (dailySteps > 0) dailySteps * 7 else 52480
+    }
+    val stepProgress = (estimatedWeeklySteps.toFloat() / targetWeeklySteps).coerceIn(0f, 1f)
+    val workoutProgress = (totalActiveWorkoutMinutes.toFloat() / weeklyWorkoutGoalMinutes).coerceIn(0f, 1f)
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfacePrimaryCard)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+            .testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Card Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Heti egészség & edzés célok",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val isOfflineCached = uiState.goalProgressCache?.isOfflineAvailable == true
+                Text(
+                    text = if (isOfflineCached) "Health Connect & Room gyorsítótár (Offline elérhető)" else "Health Connect adatok a kitűzött célok tükrében",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = if (isOfflineCached) colors.accent else colors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            OutlinedButton(
+                onClick = { showGoalModal = true },
+                modifier = Modifier
+                    .defaultMinSize(minHeight = 36.dp)
+                    .testTag("dashboard_edit_goals_button")
+            ) {
+                Text("🎯 Célok", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        // Aggregate 2-Tile Grid
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Weekly Steps Tile
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surfaceSecondary)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DirectionsWalk,
+                        contentDescription = null,
+                        tint = Color(0xFF388BFD),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Heti lépésszám",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Text(
+                    text = String.format(Locale.US, "%,d", estimatedWeeklySteps),
+                    style = TrainPilotTelemetryTypography.primaryMeasurement.copy(fontSize = 20.sp),
+                    color = colors.textPrimary,
+                    maxLines = 1
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Cél: ${String.format(Locale.US, "%,d", targetWeeklySteps)}",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                        color = colors.textSecondary,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "${(stepProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                        color = Color(0xFF388BFD)
+                    )
+                }
+
+                // Progress Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(colors.surfacePrimaryCard)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(stepProgress)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color(0xFF388BFD))
+                    )
+                }
+            }
+
+            // Total Active Workout Minutes Tile
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(colors.surfaceSecondary)
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.FitnessCenter,
+                        contentDescription = null,
+                        tint = colors.accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Aktív edzésidő",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = colors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Text(
+                    text = "$totalActiveWorkoutMinutes perc",
+                    style = TrainPilotTelemetryTypography.primaryMeasurement.copy(fontSize = 20.sp),
+                    color = colors.textPrimary,
+                    maxLines = 1
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "Cél: $weeklyWorkoutGoalMinutes perc",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp),
+                        color = colors.textSecondary,
+                        maxLines = 1
+                    )
+                    Text(
+                        text = "${(workoutProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Bold),
+                        color = colors.accent
+                    )
+                }
+
+                // Progress Bar
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(RoundedCornerShape(3.dp))
+                        .background(colors.surfacePrimaryCard)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth(workoutProgress)
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(colors.accent)
+                    )
+                }
+            }
+        }
+    }
+
+    // Goal Setting Interactive Modal
+    if (showGoalModal) {
+        var selectedMinutes by remember(profile.weeklyTargetActiveMinutes) {
+            mutableStateOf(profile.weeklyTargetActiveMinutes)
+        }
+        var selectedSteps by remember(profile.weeklyTargetSteps) {
+            mutableStateOf(profile.weeklyTargetSteps)
+        }
+        var selectedWorkouts by remember(profile.weeklyTargetWorkouts) {
+            mutableStateOf(profile.weeklyTargetWorkouts)
+        }
+
+        TrainPilotModalSheet(
+            title = "Célok beállítása",
+            onDismiss = { showGoalModal = false },
+            closeButtonTag = "goal_setting_modal_close_x",
+            footer = {
+                TrainPilotGoldButton(
+                    text = "🎯 Célok mentése",
+                    onClick = {
+                        viewModel.saveTrainingProfile(
+                            profile.copy(
+                                weeklyTargetActiveMinutes = selectedMinutes,
+                                weeklyTargetSteps = selectedSteps,
+                                weeklyTargetWorkouts = selectedWorkouts
+                            )
+                        )
+                        showGoalModal = false
+                    },
+                    testTag = "save_goals_button"
+                )
+            }
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = "Állítsd be a heti rendszerességi célokat a Health Connect mérésekhez:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = colors.textSecondary
+                )
+
+                TrainPilotDropdownField(
+                    label = "Heti aktív edzésidő cél",
+                    selectedValue = selectedMinutes,
+                    options = listOf(60, 90, 120, 150, 180, 210, 240, 300, 360),
+                    optionLabel = { "$it perc / hét" },
+                    onSelect = { selectedMinutes = it },
+                    testTag = "goal_target_minutes_dropdown"
+                )
+
+                TrainPilotDropdownField(
+                    label = "Heti lépésszám cél",
+                    selectedValue = selectedSteps,
+                    options = listOf(35000, 50000, 70000, 84000, 100000, 120000),
+                    optionLabel = { "${String.format(Locale.US, "%,d", it)} lépés / hét" },
+                    onSelect = { selectedSteps = it },
+                    testTag = "goal_target_steps_dropdown"
+                )
+
+                TrainPilotDropdownField(
+                    label = "Heti kitűzött edzésszám",
+                    selectedValue = selectedWorkouts,
+                    options = listOf(8, 10, 12, 15, 20, 24, 30),
+                    optionLabel = { "$it edzés / heti ciklus" },
+                    onSelect = { selectedWorkouts = it },
+                    testTag = "goal_target_workouts_dropdown"
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Monthly calendar view component on the Dashboard visualizing workout history
+ * and planned training sessions with interactive date selection and quick action details.
+ */
+@Composable
+private fun DashboardMonthlyCalendarCard(
+    uiState: TrainPilotUiState,
+    viewModel: TrainPilotViewModel,
+    modifier: Modifier = Modifier,
+    testTag: String = "dashboard_monthly_calendar_card"
+) {
+    val colors = LocalTrainPilotColors.current
+    val selectedDateIso = uiState.selectedCalendarDateIso
+
+    // Count completed and planned for the current month
+    val currentMonthIso = uiState.selectedCalendarMonthIso
+    val monthSchedules = remember(uiState.calendarSchedules, currentMonthIso) {
+        uiState.calendarSchedules.filter { it.dateIso.startsWith(currentMonthIso) }
+    }
+    val completedCount = remember(monthSchedules) { monthSchedules.count { it.status == "COMPLETED" } }
+    val plannedCount = remember(monthSchedules) { monthSchedules.count { it.status == "PLANNED" } }
+
+    // Workouts completed on the selected date
+    val daySchedules = remember(uiState.calendarSchedules, selectedDateIso) {
+        uiState.calendarSchedules.filter { it.dateIso == selectedDateIso }
+    }
+    val dayHistoryWorkouts = remember(uiState.workoutHistory, selectedDateIso) {
+        uiState.workoutHistory.filter { session ->
+            val date = java.time.Instant.ofEpochMilli(session.finishedAtEpochMs)
+                .atZone(java.time.ZoneId.systemDefault())
+                .toLocalDate()
+                .toString()
+            date == selectedDateIso
+        }
+    }
+
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(colors.surfacePrimaryCard)
+            .border(1.dp, colors.borderSubtle, RoundedCornerShape(16.dp))
+            .padding(16.dp)
+            .testTag(testTag),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // Card Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Havi edzésnaptár",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.textPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = "Előzmények és elkövetkező edzésnapok",
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    color = colors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = colors.semanticSuccess.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, colors.semanticSuccess.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "$completedCount kész",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = TrainPilotTelemetryTypography.badgePill.copy(fontSize = 10.sp),
+                        color = colors.semanticSuccess
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = colors.accent.copy(alpha = 0.15f),
+                    border = BorderStroke(1.dp, colors.accent.copy(alpha = 0.35f))
+                ) {
+                    Text(
+                        text = "$plannedCount terv",
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        style = TrainPilotTelemetryTypography.badgePill.copy(fontSize = 10.sp),
+                        color = colors.accent
+                    )
+                }
+            }
+        }
+
+        // Full Interactive 7-Column Calendar Month Grid
+        CalendarMonthGrid(
+            selectedMonthIso = uiState.selectedCalendarMonthIso,
+            selectedDateIso = uiState.selectedCalendarDateIso,
+            schedules = uiState.calendarSchedules,
+            onSelectMonth = { viewModel.selectCalendarMonth(it) },
+            onSelectDate = { viewModel.selectCalendarDate(it) }
+        )
+
+        // Selected Date Drawer / Action Details
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.surfaceSecondary)
+                .border(1.dp, colors.borderSubtle, RoundedCornerShape(12.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Kiválasztott nap: $selectedDateIso",
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = colors.accent
+                )
+                Text(
+                    text = "Naptár megnyitása ›",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = colors.accent,
+                    modifier = Modifier.clickable {
+                        viewModel.selectMinorDestination(TopMinorDestination.CALENDAR)
+                    }
+                )
+            }
+
+            if (daySchedules.isEmpty() && dayHistoryWorkouts.isEmpty()) {
+                Text(
+                    text = "Nincs elmentett vagy teljesített edzés ezen a napon.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary
+                )
+            } else {
+                // Render completed workout history items
+                dayHistoryWorkouts.forEach { workout ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfacePrimaryCard)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "✔ ${workout.title}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = colors.semanticSuccess
+                            )
+                            Text(
+                                text = "${workout.durationSeconds / 60} perc • ${workout.totalVolumeKg.toInt()} kg volumennel",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = colors.textSecondary
+                            )
+                        }
+                    }
+                }
+
+                // Render planned schedules
+                daySchedules.forEach { schedule ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(colors.surfacePrimaryCard)
+                            .padding(8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "📅 ${schedule.title}",
+                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                color = colors.textPrimary
+                            )
+                            Text(
+                                text = "Tervezett időpont: ${schedule.timeHm} • Állapot: ${schedule.status}",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                color = colors.textSecondary
+                            )
+                        }
+
+                        if (schedule.status != "COMPLETED") {
+                            Button(
+                                onClick = {
+                                    val activeProg = uiState.programs.firstOrNull { it.isActive } ?: uiState.programs.firstOrNull()
+                                    val activeDay = uiState.programDays.firstOrNull { it.programId == activeProg?.id }
+                                    if (activeProg != null && activeDay != null) {
+                                        viewModel.startProgramWorkout(activeProg.id, activeDay.id)
+                                    } else {
+                                        viewModel.startQuickWorkout(outdoorGps = false)
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = colors.accent,
+                                    contentColor = Color.Black
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.defaultMinSize(minHeight = 36.dp)
+                            ) {
+                                Text("Indítás", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+

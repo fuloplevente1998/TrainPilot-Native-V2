@@ -164,14 +164,19 @@ fun ActiveWorkoutPanel(
     var exerciseRating by remember { mutableStateOf(3) }
     var exercisePainReported by remember { mutableStateOf(false) }
 
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .background(colors.backgroundPrimary)
-            .padding(horizontal = 14.dp, vertical = 10.dp)
-            .testTag("screen_active_workout_v07_v12"),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(horizontal = 14.dp, vertical = 10.dp)
+                .testTag("screen_active_workout_v07_v12"),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
         // Main branch style: Top ownership pill "(•) A telefon vezérli az edzést ∨"
         item {
             Surface(
@@ -718,72 +723,114 @@ fun ActiveWorkoutPanel(
                         }
                     }
 
-                    // Bottom Navigation Bar: Automata mód + Előző / Következő gyakorlat
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                }
+            }
+        }
+    }
+
+    // Sticky Bottom Bar: Rest Timer Countdown + Previous / Next Exercise Navigation
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("active_workout_sticky_bottom_bar"),
+        color = colors.surfacePrimaryCard,
+        border = BorderStroke(1.dp, colors.borderSubtle),
+        shadowElevation = 8.dp
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // Rest Countdown Timer Bar (when rest timer is active or paused)
+            if (draft.restRemainingSeconds > 0 || draft.isRestPaused) {
+                RestTimerCard(
+                    remainingSec = draft.restRemainingSeconds,
+                    targetRestSec = currentExercise?.targetRestSeconds ?: 90,
+                    isPaused = draft.isRestPaused,
+                    onTogglePause = { viewModel.toggleRestTimerPause() },
+                    onMinus15 = { viewModel.adjustRestTimer(-15) },
+                    onPlus15 = { viewModel.adjustRestTimer(15) },
+                    onSkip = { viewModel.skipRestTimer() }
+                )
+            }
+
+            // Exercise Navigation Controls
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(
+                        checked = autoAdvanceMode,
+                        onCheckedChange = { autoAdvanceMode = it },
+                        modifier = Modifier.testTag("exercise_auto_mode_checkbox")
+                    )
+                    Text(
+                        text = "Automata mód",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = colors.textPrimary
+                    )
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (draft.currentExerciseIndex > 0) {
+                                viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex - 1)
+                            }
+                        },
+                        enabled = draft.currentExerciseIndex > 0,
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 44.dp)
+                            .testTag("exercise_prev_button")
                     ) {
-                        Checkbox(
-                            checked = autoAdvanceMode,
-                            onCheckedChange = { autoAdvanceMode = it },
-                            modifier = Modifier.testTag("exercise_auto_mode_checkbox")
-                        )
                         Text(
-                            text = "Automata mód",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = colors.textPrimary
+                            text = "‹ Előző",
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    Button(
+                        onClick = {
+                            if (draft.currentExerciseIndex < draft.exercises.size - 1) {
+                                viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex + 1)
+                            } else {
+                                viewModel.openFinishWorkoutModal()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = colors.accent,
+                            contentColor = tokens.onAccent
+                        ),
+                        modifier = Modifier
+                            .defaultMinSize(minHeight = 44.dp)
+                            .testTag("exercise_next_button")
                     ) {
-                        OutlinedButton(
-                            onClick = {
-                                if (draft.currentExerciseIndex > 0) {
-                                    viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex - 1)
-                                }
-                            },
-                            enabled = draft.currentExerciseIndex > 0,
-                            modifier = Modifier
-                                .weight(1f)
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("exercise_prev_button")
-                        ) {
-                            Text("Előző gyakorlat")
-                        }
-
-                        Button(
-                            onClick = {
-                                if (draft.currentExerciseIndex < draft.exercises.size - 1) {
-                                    viewModel.selectActiveExerciseIndex(draft.currentExerciseIndex + 1)
-                                } else {
-                                    viewModel.openFinishWorkoutModal()
-                                }
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = colors.accent,
-                                contentColor = tokens.onAccent
-                            ),
-                            modifier = Modifier
-                                .weight(1.3f)
-                                .defaultMinSize(minHeight = 48.dp)
-                                .testTag("exercise_next_button")
-                        ) {
-                            Text(
-                                text = if (draft.currentExerciseIndex < draft.exercises.size - 1)
-                                    "Következő gyakorlat"
-                                else
-                                    "Edzés befejezése",
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = if (draft.currentExerciseIndex < draft.exercises.size - 1)
+                                "Következő ›"
+                            else
+                                "Befejezés",
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
         }
     }
+}
 
     // Exercise Demo Modal (Screenshot 3 style with Scott Herman Fitness & UnifiedCloseButton)
     if (showExerciseDemo && currentExercise != null) {

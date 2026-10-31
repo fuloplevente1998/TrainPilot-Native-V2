@@ -427,4 +427,37 @@ class TrainPilotNativeV2Test {
         composeRule.onNodeWithTag("nav_minor_coach").performClick()
         composeRule.onNodeWithTag("coach_three_scores_card").assertExists()
     }
+
+    @Test
+    fun roomDatabase_persistsWorkoutHistoryAndGoalProgressCache_forOfflineAvailability() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val db = com.repforge.app.nativev2.data.db.TrainPilotDatabase.getInstance(context)
+        val dao = db.dao()
+
+        val goalCache = com.repforge.app.nativev2.data.db.GoalProgressCacheEntity(
+            id = "current_weekly_goal",
+            weekIso = "2026-10",
+            weeklyTargetActiveMinutes = 150,
+            weeklyTargetStepCount = 50000,
+            weeklyTargetWorkouts = 4,
+            actualActiveMinutes = 120,
+            actualStepCount = 42000,
+            actualWorkoutsCount = 3,
+            stepProgressPercent = 0.84f,
+            workoutProgressPercent = 0.80f,
+            lastCachedAtEpochMs = System.currentTimeMillis(),
+            isOfflineAvailable = true
+        )
+
+        kotlinx.coroutines.runBlocking {
+            dao.upsertGoalProgressCache(goalCache)
+            val retrieved = dao.getGoalProgressCacheNow()
+
+            assertNotNull("Goal progress cache must be persisted in Room", retrieved)
+            assertEquals(150, retrieved?.weeklyTargetActiveMinutes)
+            assertEquals(50000, retrieved?.weeklyTargetStepCount)
+            assertEquals(120, retrieved?.actualActiveMinutes)
+            assertTrue("Cache must be flagged offline available", retrieved?.isOfflineAvailable == true)
+        }
+    }
 }

@@ -3,6 +3,8 @@ package com.repforge.app.nativev2.ui.screens
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -118,58 +120,111 @@ fun JournalScreen(
         }
     }
 
-    Column(
+    var activeJournalSubTab by remember { mutableIntStateOf(0) }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
             .background(colors.backgroundPrimary)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
             .testTag("screen_journal_v13")
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Edzésnapló (V13)",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = colors.textPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "${filteredWorkouts.size} naplózott edzés • PR és utólagos korrekció",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = colors.textSecondary
-                )
-            }
-            Button(
-                onClick = { viewModel.openSubDestination(SubDestination.PROGRESS) },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = colors.accent,
-                    contentColor = tokens.onAccent
-                ),
+        // Side-by-Side 2 Sub-Tabs Header (Edzésnapló vs Fejlődés)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(colors.surfaceSecondary)
+                .padding(4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Surface(
                 modifier = Modifier
-                    .defaultMinSize(minHeight = 48.dp)
-                    .testTag("journal_open_progress_button")
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { activeJournalSubTab = 0 }
+                    .testTag("journal_subtab_workouts"),
+                color = if (activeJournalSubTab == 0) colors.accent else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
             ) {
-                Icon(Icons.Default.ShowChart, contentDescription = null)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(strings.navProgress, fontWeight = FontWeight.Bold)
+                Box(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Edzésnapló",
+                        fontWeight = FontWeight.Bold,
+                        color = if (activeJournalSubTab == 0) tokens.onAccent else colors.textPrimary,
+                        fontSize = 14.sp
+                    )
+                }
+            }
+
+            Surface(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable { activeJournalSubTab = 1 }
+                    .testTag("journal_subtab_progress"),
+                color = if (activeJournalSubTab == 1) colors.accent else Color.Transparent,
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Box(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Fejlődés",
+                        fontWeight = FontWeight.Bold,
+                        color = if (activeJournalSubTab == 1) tokens.onAccent else colors.textPrimary,
+                        fontSize = 14.sp
+                    )
+                }
             }
         }
 
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        OutlinedTextField(
-            value = uiState.journalSearchQuery,
-            onValueChange = { viewModel.setJournalSearch(it) },
-            label = { Text(strings.searchPlaceholder) },
-            singleLine = true,
-            modifier = Modifier
-                .fillMaxWidth()
-                .testTag("journal_search_input")
-        )
+        if (activeJournalSubTab == 1) {
+            ProgressScreen(
+                uiState = uiState,
+                viewModel = viewModel,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                Text(
+                    text = "${filteredWorkouts.size} naplózott edzés",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = colors.textSecondary,
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedTextField(
+                value = uiState.journalSearchQuery,
+                onValueChange = { viewModel.setJournalSearch(it) },
+                label = { Text(strings.searchPlaceholder) },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("journal_search_input")
+            )
 
         if (availableMonths.isNotEmpty()) {
             Spacer(modifier = Modifier.height(6.dp))
@@ -359,7 +414,7 @@ fun JournalScreen(
         JournalDetailAndEditModal(
             workout = selectedWorkout,
             sets = workoutSets,
-            onSaveEdited = { effort, hadPain, notes, updatedSets ->
+            onSaveEdited = { effort: EffortLevel, hadPain: Boolean, notes: String, updatedSets: List<WorkoutHistorySetEntity> ->
                 viewModel.savePostHocJournalEdit(
                     workoutId = selectedWorkout.id,
                     effort = effort,
@@ -375,11 +430,14 @@ fun JournalScreen(
             onDismiss = { viewModel.openJournalWorkoutDetails(null) }
         )
     }
+   }
+  }
+}
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun JournalDetailAndEditModal(
+fun JournalDetailAndEditModal(
     workout: WorkoutHistoryEntity,
     sets: List<WorkoutHistorySetEntity>,
     onSaveEdited: (EffortLevel, Boolean, String, List<WorkoutHistorySetEntity>) -> Unit,
@@ -972,7 +1030,7 @@ fun ProgressScreen(
                         }
                     }
                 }
-            }
-        }
     }
+}
+}
 }

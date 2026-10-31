@@ -183,67 +183,6 @@ fun TopFivePlusThreeHeader(
             }
         }
 
-        // Subscreen / Minor breadcrumb bar with red X close button
-        if (!isInMainOnly) {
-            Spacer(modifier = Modifier.height(6.dp))
-            val subTitle = when {
-                activeSubDestination == SubDestination.PROGRESS -> strings.navProgress
-                activeSubDestination == SubDestination.EXERCISE_LIBRARY -> strings.navExerciseLibrary
-                activeMinorDestination == TopMinorDestination.SETTINGS -> strings.navSettings
-                activeMinorDestination == TopMinorDestination.CALENDAR -> strings.navCalendar
-                activeMinorDestination == TopMinorDestination.COACH -> strings.navCoach
-                else -> ""
-            }
-            Surface(
-                color = tokens.card,
-                shape = RoundedCornerShape(14.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, tokens.line, RoundedCornerShape(14.dp))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = subTitle,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                        color = tokens.text
-                    )
-                    Box(
-                        modifier = Modifier
-                            .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(Color(0xFF4A2026))
-                            .border(1.dp, Color(0xFF7A353F), RoundedCornerShape(12.dp))
-                            .clickable { onReturnToMainTab() }
-                            .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .testTag("subscreen_back_button"),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Bezárás",
-                                tint = Color(0xFFFFECEE),
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(
-                                text = "Bezár",
-                                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                color = Color(0xFFFFECEE)
-                            )
-                        }
-                    }
-                }
-            }
-        }
 
         // Persistent Active Workout Bar when activeWorkout != null and user is not on TRAINING main tab
         if (activeWorkout != null && !(isInMainOnly && activeMainTab == TopMainTab.TRAINING)) {

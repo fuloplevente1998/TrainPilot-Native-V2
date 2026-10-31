@@ -165,6 +165,33 @@ data class KeyValuePrefEntity(
     val prefValue: String
 )
 
+@Entity(tableName = "goal_progress_cache")
+data class GoalProgressCacheEntity(
+    @PrimaryKey val id: String = "current_weekly_goal",
+    val weekIso: String,
+    val weeklyTargetActiveMinutes: Int,
+    val weeklyTargetStepCount: Int,
+    val weeklyTargetWorkouts: Int,
+    val actualActiveMinutes: Int,
+    val actualStepCount: Int,
+    val actualWorkoutsCount: Int,
+    val stepProgressPercent: Float,
+    val workoutProgressPercent: Float,
+    val lastCachedAtEpochMs: Long,
+    val isOfflineAvailable: Boolean = true
+)
+
+@Entity(tableName = "sync_queue")
+data class SyncQueueEntity(
+    @PrimaryKey val id: String,
+    val entityType: String,
+    val entityId: String,
+    val payloadJson: String,
+    val createdAtEpochMs: Long,
+    val retryCount: Int = 0,
+    val status: String = "PENDING"
+)
+
 @Dao
 interface TrainPilotDao {
     @Query("SELECT * FROM programs ORDER BY isActive DESC, isBuiltIn DESC, name ASC")
@@ -319,6 +346,30 @@ interface TrainPilotDao {
     @Query("DELETE FROM kv_preferences WHERE prefKey = :key")
     suspend fun deletePref(key: String)
 
+    @Query("SELECT * FROM goal_progress_cache WHERE id = 'current_weekly_goal' LIMIT 1")
+    fun observeGoalProgressCache(): Flow<GoalProgressCacheEntity?>
+
+    @Query("SELECT * FROM goal_progress_cache WHERE id = 'current_weekly_goal' LIMIT 1")
+    suspend fun getGoalProgressCacheNow(): GoalProgressCacheEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertGoalProgressCache(cache: GoalProgressCacheEntity)
+
+    @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY createdAtEpochMs ASC")
+    fun observePendingSyncItems(): Flow<List<SyncQueueEntity>>
+
+    @Query("SELECT * FROM sync_queue WHERE status = 'PENDING' ORDER BY createdAtEpochMs ASC")
+    suspend fun getPendingSyncItemsNow(): List<SyncQueueEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSyncItem(item: SyncQueueEntity)
+
+    @Query("DELETE FROM sync_queue WHERE id = :id")
+    suspend fun deleteSyncItem(id: String)
+
+    @Query("UPDATE sync_queue SET status = :status, retryCount = :retryCount WHERE id = :id")
+    suspend fun updateSyncItemStatus(id: String, status: String, retryCount: Int)
+
     @Transaction
     suspend fun eraseAllUserDataAndReseed() {
         val customs = getProgramsNow().filter { !it.isBuiltIn }
@@ -347,7 +398,9 @@ interface TrainPilotDao {
         WeightEntryEntity::class,
         WorkoutRouteEntity::class,
         WorkoutPhotoEntity::class,
-        KeyValuePrefEntity::class
+        KeyValuePrefEntity::class,
+        GoalProgressCacheEntity::class,
+        SyncQueueEntity::class
     ],
     version = 1,
     exportSchema = false
